@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>돈구리</title>
+  <meta name="description" content="오늘 써도 되는 돈을 매일 한 숫자로 알려 주는 10대 용돈 관리 앱">
+  <meta name="theme-color" content="#F2F4F7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="돈구리">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Noto+Sans+KR:wght@400;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="stage-wrap">
+    <aside class="demo-panel" aria-label="시연 도구">
+      <div>
+        <h1>돈구리</h1>
+        <p>잎새 하나, 꿈 하나, 함께 쌓아가는 인연.</p>
+      </div>
+      <div class="card">
+        <b>시연 도구</b>
+        <p class="small">발표할 때 이 버튼으로 하루를 넘기며 롤링 한도와 무지출 보상을 보여 주세요.</p>
+        <button class="btn line block" data-act="demo-load">시연 데이터 불러오기</button>
+        <button class="btn primary block" data-act="demo-next">하루 넘기기</button>
+        <button class="btn text" data-act="ask-reset">처음부터 다시 하기</button>
+      </div>
+      <div class="card small">
+        <b>3분 시연 순서</b>
+        <p>① 홈의 "오늘 써도 되는 돈" ② 떡볶이 지출 기록 ③ 남은 돈 저축 ④ 하루 넘기기로 한도 변화 ⑤ 퀴즈 → 상점 ⑥ 코치에게 "금요일에 떡볶이 먹어도 돼?"</p>
+      </div>
+    </aside>
+    <div class="phone" aria-live="off"></div>
+  </div>
+  <noscript>돈구리는 자바스크립트가 켜져 있어야 동작해요.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 // 앱 상태: 기기 저장, 날짜 넘김 처리, 기록·저축·보상, 시연 데이터.
-import { ymd, addDays, cycleRange, dayStatus, rewardFor } from './budget.js';
+import { ymd, addDays, weekday, cycleRange, dayStatus, rewardFor } from './budget.js';
 
 const KEY = 'dongguri-v1';
 
@@ -148,7 +148,8 @@ export function demoState(today) {
   const s = blankState();
   const start = addDays(today, -13);
   s.startDate = start;
-  setupBudget(s, DEMO_SETTINGS, start);
+  // 시연하는 날이 언제든 용돈 주기 5일째가 되도록 받는 요일을 맞춘다.
+  setupBudget(s, { ...DEMO_SETTINGS, payday: weekday(addDays(today, -4)) }, start);
   for (const [ago, items] of DEMO_DAYS) {
     const d = addDays(today, -ago);
     newDay(s, d);

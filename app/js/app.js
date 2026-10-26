@@ -51,14 +51,14 @@ function mood(st) {
 function charStage(st, extraClass = '') {
   const m = mood(st);
   const acc = state.equipped.acc && byId(state.equipped.acc);
-  const hb = state.equipped.hanbok && byId(state.equipped.hanbok);
+  const ob = state.equipped.obj && byId(state.equipped.obj);
   return `<section class="stage ${extraClass}" aria-label="돈구리">
     <div class="leaf-fall" id="leafFall"></div>
     <p class="bubble">${m.line}</p>
     <div class="char">
       <span class="pose">${mascot(m.mood, 140)}</span>
-      ${hb ? `<span class="wear hanbok" title="${esc(hb.name)}">${hb.art}<span class="sr">${esc(hb.name)} 착용 중</span></span>` : ''}
-      ${acc ? `<span class="wear acc" title="${esc(acc.name)}">${acc.art}<span class="sr">${esc(acc.name)} 착용 중</span></span>` : ''}
+      ${ob ? `<span class="wear obj" title="${esc(ob.name)}"><img src="${ob.img}" alt=""><span class="sr">${esc(ob.name)} 함께하는 중</span></span>` : ''}
+      ${acc ? `<span class="wear acc" title="${esc(acc.name)}"><img src="${acc.img}" alt=""><span class="sr">${esc(acc.name)} 착용 중</span></span>` : ''}
     </div>
   </section>`;
 }
@@ -286,16 +286,16 @@ function shopView() {
   const st = dayStatus(state, today);
   const items = SHOP.filter((i) => i.kind === view.shopKind);
   return `${charStage(st)}
-    <div class="row"><div class="seg" style="flex:1"><button data-act="shop-kind" data-k="acc" aria-pressed="${view.shopKind === 'acc'}">액세서리</button><button data-act="shop-kind" data-k="hanbok" aria-pressed="${view.shopKind === 'hanbok'}">한복</button></div></div>
+    <div class="row"><div class="seg" style="flex:1"><button data-act="shop-kind" data-k="acc" aria-pressed="${view.shopKind === 'acc'}">액세서리</button><button data-act="shop-kind" data-k="obj" aria-pressed="${view.shopKind === 'obj'}">저축 소품</button></div></div>
     <div class="closet">${items.map((i) => {
       const owned = state.inventory.includes(i.id);
       const worn = state.equipped[i.kind] === i.id;
       return `<button class="goods ${worn ? 'worn' : ''}" data-act="goods" data-id="${i.id}">
-        ${worn ? '<span class="badge tag" style="background:var(--blue);color:#fff">착용 중</span>' : owned ? '<span class="badge tag plain">보유</span>' : ''}
-        <span class="pic">${i.art}</span>
+        ${worn ? '<span class="badge tag" style="background:var(--blue);color:#fff">함께하는 중</span>' : owned ? '<span class="badge tag plain">보유</span>' : ''}
+        <span class="pic"><img src="${i.img}" alt=""></span>
         <b>${esc(i.name)}</b>
         <span class="small muted">${esc(i.line)}</span>
-        ${owned ? `<span class="small" style="font-weight:700;color:var(--blue)">${worn ? '눌러서 벗기' : '눌러서 입기'}</span>` : `<span class="price num">${leaf(16)} ${i.price}잎</span>`}
+        ${owned ? `<span class="small" style="font-weight:700;color:var(--blue)">${worn ? '눌러서 내려놓기' : '눌러서 함께하기'}</span>` : `<span class="price num">${leaf(16)} ${i.price}잎</span>`}
       </button>`;
     }).join('')}</div>
     <p class="small muted" style="text-align:center;margin:0">은행잎은 퀴즈 정답 3장, 기록 1장, 저축 2장, 무지출 하루 5장이에요.</p>`;
@@ -306,7 +306,7 @@ function buySheet() {
   const lack = i.price - state.leaves;
   return `<div class="grabber"></div>
     <div style="display:grid;justify-items:center;gap:8px;text-align:center">
-      <span class="pic" style="width:120px;height:120px;border-radius:24px;background:var(--hanji);display:grid;place-items:center">${i.art}</span>
+      <span class="pic" style="width:120px;height:120px;border-radius:24px;background:var(--hanji);display:grid;place-items:center"><img src="${i.img}" alt="" style="max-height:96px;width:auto"></span>
       <h3>${esc(i.name)}을(를) 구매할까요?</h3>
       <p class="muted" style="margin:0">${esc(i.line)}</p>
       <div class="preview" style="width:100%;text-align:left"><span class="row"><span>가격</span><span class="arrow num">${leaf(14)} ${i.price}잎</span></span>
@@ -314,7 +314,7 @@ function buySheet() {
       ${lack > 0 ? `<p class="err" style="margin:0">은행잎이 ${lack}장 부족해요. 오늘의 퀴즈로 모아 볼까요?</p>` : ''}
     </div>
     <div class="btn-row"><button class="btn ghost" data-act="close">다음에</button>
-    ${lack > 0 ? '<button class="btn primary" data-act="tab" data-tab="quiz">퀴즈 풀러 가기</button>' : `<button class="btn primary" data-act="buy" data-id="${i.id}">구매하고 입기</button>`}</div>`;
+    ${lack > 0 ? '<button class="btn primary" data-act="tab" data-tab="quiz">퀴즈 풀러 가기</button>' : `<button class="btn primary" data-act="buy" data-id="${i.id}">구매하기</button>`}</div>`;
 }
 
 // ───────────────────────── 설정 ─────────────────────────
@@ -369,7 +369,7 @@ function onbView() {
   const d = o.draft;
   if (o.step === 0) {
     return `<div class="welcome">
-      <div class="hero" id="heroLeaves"><span class="hero-mascot">${mascot('cheer', 200)}</span><span class="badge plain hero-note">캐릭터는 나중에 확정돼요 · 지금은 임시 그림</span></div>
+      <div class="hero" id="heroLeaves"><span class="hero-mascot">${mascot('cheer', 200)}</span></div>
       <div class="copy">
         <h1 class="brand">돈구리</h1>
         <p class="slogan">오늘 써도 되는 돈, 매일 한 숫자로.</p>
@@ -549,7 +549,7 @@ const ACT = {
     if (state.inventory.includes(i.id)) {
       state.equipped[i.kind] = state.equipped[i.kind] === i.id ? null : i.id;
       persist(); render();
-      toast(phone, state.equipped[i.kind] ? `${esc(i.name)}을(를) 입었어요` : `${esc(i.name)}을(를) 벗었어요`, 1600);
+      toast(phone, state.equipped[i.kind] ? `${esc(i.name)}을(를) 돈구리에게 줬어요` : `${esc(i.name)}을(를) 내려놓았어요`, 1600);
     } else open({ type: 'buy', id: i.id });
   },
   buy: (el) => {

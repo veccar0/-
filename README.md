@@ -23,8 +23,8 @@ node tests/e2e/walkthrough.mjs http://localhost:8080/ shots   # 화면 스크린
 | `app/js/store.js` | 기기 저장, 날짜 넘김 처리(무지출 보상·주기 저축·남은 돈 이월), 시연 데이터 |
 | `app/js/coach.js` | 코치 답변. 계산은 앱이 하고 Claude는 설명만 함. 키가 없으면 규칙 기반 답변 |
 | `app/js/app.js` | 화면과 동작 |
-| `app/js/quiz-data.js`, `shop-data.js` | 퀴즈 30문항, 상점 8개 |
-| `app/js/mascot.js` | 임시 마스코트 그림. 캐릭터가 정해지면 이 파일(와 `shop-data.js`의 그림)만 바꾸면 돼요 |
+| `app/js/quiz-data.js`, `shop-data.js` | 퀴즈 30문항, 상점 8개(액세서리 4 + 저축 소품 4) |
+| `app/assets/mascot/`, `app/assets/items/` | 너구리 돈구리 8컷과 상점 물건 8개 (Higgsfield로 생성). 그림을 바꿀 때는 같은 이름의 파일만 교체하면 돼요 |
 
 ## 시연 팁
 

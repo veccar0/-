@@ -17,7 +17,7 @@ export const blankState = () => ({
   quiz: { date: null, answered: {} },
   wrong: [],
   inventory: [],
-  equipped: { acc: null, hanbok: null },
+  equipped: { acc: null, obj: null },
   coachKey: '',
   chat: [],
 });
@@ -158,8 +158,8 @@ export function demoState(today) {
   }
   newDay(s, today);
   s.leaves = 42;
-  s.inventory = ['acc-leaf', 'hanbok-walk'];
-  s.equipped = { acc: 'acc-leaf', hanbok: null };
+  s.inventory = ['acc-leaf', 'obj-piggy'];
+  s.equipped = { acc: 'acc-leaf', obj: 'obj-piggy' };
   s.wrong = [7, 19];
   return s;
 }

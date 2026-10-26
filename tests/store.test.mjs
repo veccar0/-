@@ -75,3 +75,11 @@ test('demo state is ready for the stage: 42 leaves and a 5-day streak', () => {
   assert.ok(s.entries.length > 10);
   assert.equal(s.settings.goalName, '무선 이어폰');
 });
+
+test('demo state looks the same whatever weekday the demo runs on', () => {
+  for (const day of ['2026-10-26', '2026-10-29', '2026-11-01', '2026-12-11']) {
+    const s = demoState(day);
+    assert.equal(streak(s, day), 5, day);
+    assert.equal(dayStatus(s, day).limit, dayStatus(demoState('2026-12-11'), '2026-12-11').limit, day);
+  }
+});

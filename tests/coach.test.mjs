@@ -45,3 +45,16 @@ test('rule answer offers the most it can when it does not fit', () => {
   assert.match(a.text, new RegExp(s.cycleLeft.toLocaleString('ko-KR')));
   assert.doesNotMatch(a.text, /쓰지 마/);
 });
+
+test('readQuestion understands "today" and "tomorrow"', () => {
+  assert.deepEqual(readQuestion('오늘 떡볶이 먹어도 돼?'), { offset: 0, amount: 4000, topic: 'reserve' });
+  assert.deepEqual(readQuestion('내일 영화 봐도 돼?'), { offset: 1, amount: 14000, topic: 'reserve' });
+});
+
+test('rule answer for today checks today\'s money', () => {
+  const s = dayStatus(state(spentMon), wed);
+  const a = ruleAnswer('오늘 떡볶이 먹어도 돼?', s, wed, state(spentMon));
+  assert.match(a.text, /오늘/);
+  assert.match(a.text, /4,000원/);
+  assert.equal(a.plan[0].amount, 4000);
+});

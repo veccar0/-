@@ -57,7 +57,7 @@ img { max-width: 100%; display: block; }
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 6px; padding-top: max(14px, env(safe-area-inset-top, 0px)); }
 .who { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--hanji); border: 2px solid var(--leaf); overflow: hidden; display: grid; place-items: center; }
-.avatar img { width: 120%; max-width: none; }
+.avatar svg { width: 100%; height: 100%; }
 .who b { display: block; font-size: 14px; }
 .who span { font-size: 12px; color: var(--sub); }
 .top-actions { display: flex; align-items: center; gap: 8px; }
@@ -87,9 +87,9 @@ img { max-width: 100%; display: block; }
 .bubble { align-self: center; background: var(--card); border-radius: 18px 18px 18px 6px; padding: 12px 14px; font-size: 14px; line-height: 1.45; box-shadow: 0 2px 10px rgba(80, 60, 20, .08); position: relative; margin-bottom: 16px; }
 .bubble b { color: var(--ink); }
 .char { position: relative; height: 150px; display: flex; align-items: end; justify-content: center; }
-.char img.pose { max-height: 150px; width: auto; filter: drop-shadow(0 6px 8px rgba(90, 70, 30, .15)); }
+.char .pose svg { display: block; }
 .char .wear { position: absolute; width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.85); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
-.char .wear img { max-width: 32px; max-height: 32px; }
+.char .wear svg { width: 32px; height: 32px; }
 .char .wear.acc { right: -4px; top: 6px; }
 .char .wear.hanbok { left: -6px; top: 26px; }
 .leaf-fall { position: absolute; inset: 0; pointer-events: none; }
@@ -206,14 +206,15 @@ img { max-width: 100%; display: block; }
 .onb .lead { color: var(--sub); margin: 8px 0 0; }
 .onb-body { display: grid; gap: 18px; align-content: start; }
 .welcome { flex: 1; display: grid; grid-template-rows: 1fr auto; overflow-y: auto; }
-.welcome .hero { position: relative; background: var(--hanji); min-height: 340px; overflow: hidden; }
-.welcome .hero .tree { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 70%; }
-.welcome .hero::after { content: ""; position: absolute; inset: auto 0 0; height: 64px; background: linear-gradient(transparent, var(--card)); }
+.welcome .hero { position: relative; background: radial-gradient(90% 80% at 50% 90%, #FFFDF7 0%, var(--hanji) 75%); min-height: 340px; overflow: hidden; display: grid; place-items: center; }
+.welcome .hero-mascot { position: relative; animation: bob 3s ease-in-out infinite; }
+.welcome .hero-note { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
 .welcome .copy { padding: 24px 22px 22px; display: grid; gap: 10px; background: var(--card); padding-bottom: max(22px, env(safe-area-inset-bottom, 0px)); }
 .brand { font-family: var(--title); font-size: 40px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
 .slogan { font-family: var(--title); font-size: 17px; color: var(--sub); margin: 0 0 8px; }
 .result-big { text-align: center; display: grid; gap: 6px; justify-items: center; }
-.result-big img { height: 170px; width: auto; }
+.result-big svg { display: block; }
 .result-big .big { font-size: 44px; font-weight: 800; }
 
 /* ── 퀴즈 ── */
@@ -237,7 +238,7 @@ img { max-width: 100%; display: block; }
 .explain { background: var(--soft); border-radius: 16px; padding: 14px 16px; font-size: 14px; display: grid; gap: 4px; }
 .explain b { font-size: 15px; }
 .quiz-done { text-align: center; display: grid; gap: 8px; justify-items: center; }
-.quiz-done img { height: 150px; width: auto; }
+.quiz-done svg { display: block; }
 .score { font-size: 36px; font-weight: 800; }
 
 /* ── 코치 ── */
@@ -267,7 +268,7 @@ img { max-width: 100%; display: block; }
 .closet { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .goods { background: var(--card); border-radius: 18px; padding: 12px; display: grid; gap: 8px; text-align: left; position: relative; }
 .goods .pic { height: 96px; border-radius: 12px; background: var(--hanji); display: grid; place-items: center; }
-.goods .pic img { max-height: 80px; width: auto; }
+.goods .pic svg { width: 72px; height: 72px; }
 .goods b { font-size: 14px; }
 .goods .price { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 14px; }
 .goods .tag { position: absolute; top: 18px; left: 18px; }

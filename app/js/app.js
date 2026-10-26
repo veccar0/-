@@ -5,9 +5,9 @@ import { QUIZ } from './quiz-data.js';
 import { SHOP, byId } from './shop-data.js';
 import { askClaude } from './coach.js';
 import { esc, won, comma, leaf, ICON, CATEGORIES, catOf, toast, leafBurst, leafFall } from './ui.js';
+import { mascot } from './mascot.js';
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
-const CHAR = (name) => `assets/char/${name}.png`;
 const phone = document.querySelector('.phone');
 
 let state = load();
@@ -38,14 +38,14 @@ function mood(st) {
   const g = goalProgress(state);
   const pct = Math.floor(g.ratio * 100);
   const hour = new Date().getHours();
-  if (st.savedToday > 0) return { pose: 'pose-cheer', face: 'face-joy', line: `저축 성공! ${esc(state.settings.goalName)}까지 <b>${pct}%</b> 왔어.` };
-  if (st.left < 0) return { pose: 'pose-imagine', face: 'face-surprise', line: `오늘 <b>${won(-st.left)}</b> 넘었어. 괜찮아, 남은 날에 조금씩 나눠서 맞추면 돼.` };
-  if (st.spentToday === 0 && hour >= 21) return { pose: 'pose-rest', face: 'face-calm', line: '오늘은 무지출이야! 내일 은행잎 <b>5장</b>을 줄게.' };
+  if (st.savedToday > 0) return { mood: 'cheer', line: `저축 성공! ${esc(state.settings.goalName)}까지 <b>${pct}%</b> 왔어.` };
+  if (st.left < 0) return { mood: 'surprise', line: `오늘 <b>${won(-st.left)}</b> 넘었어. 괜찮아, 남은 날에 조금씩 나눠서 맞추면 돼.` };
+  if (st.spentToday === 0 && hour >= 21) return { mood: 'rest', line: '오늘은 무지출이야! 내일 은행잎 <b>5장</b>을 줄게.' };
   if (st.spentToday === 0) {
     const extra = st.bonus > 0 ? ` 아낀 <b>${won(st.bonus)}</b>이 더해졌어.` : '';
-    return { pose: 'pose-wish', face: 'face-calm', line: `오늘은 <b>${won(st.limit)}</b>까지 써도 괜찮아.${extra}` };
+    return { mood: 'calm', line: `오늘은 <b>${won(st.limit)}</b>까지 써도 괜찮아.${extra}` };
   }
-  return { pose: 'pose-walk', face: 'face-harmony', line: `좋아, 오늘 <b>${won(st.left)}</b> 남았어. 남기면 내일로 넘어가!` };
+  return { mood: 'walk', line: `좋아, 오늘 <b>${won(st.left)}</b> 남았어. 남기면 내일로 넘어가!` };
 }
 
 function charStage(st, extraClass = '') {
@@ -56,9 +56,9 @@ function charStage(st, extraClass = '') {
     <div class="leaf-fall" id="leafFall"></div>
     <p class="bubble">${m.line}</p>
     <div class="char">
-      <img class="pose" src="${CHAR(m.pose)}" alt="돈구리">
-      ${hb ? `<span class="wear hanbok" title="${esc(hb.name)}"><img src="${hb.img}" alt="${esc(hb.name)} 착용 중"></span>` : ''}
-      ${acc ? `<span class="wear acc" title="${esc(acc.name)}"><img src="${acc.img}" alt="${esc(acc.name)} 착용 중"></span>` : ''}
+      <span class="pose">${mascot(m.mood, 140)}</span>
+      ${hb ? `<span class="wear hanbok" title="${esc(hb.name)}">${hb.art}<span class="sr">${esc(hb.name)} 착용 중</span></span>` : ''}
+      ${acc ? `<span class="wear acc" title="${esc(acc.name)}">${acc.art}<span class="sr">${esc(acc.name)} 착용 중</span></span>` : ''}
     </div>
   </section>`;
 }
@@ -66,10 +66,9 @@ function charStage(st, extraClass = '') {
 // ───────────────────────── 공통 틀 ─────────────────────────
 function topbar(st) {
   const s = streak(state, today);
-  const face = mood(st).face;
   return `<header class="topbar">
     <div class="who">
-      <span class="avatar"><img src="${CHAR(face)}" alt=""></span>
+      <span class="avatar">${mascot(mood(st).mood, 40, '')}</span>
       <div><b>돈구리 <span class="badge plain">Lv.${level(s)}</span></b><span>${ICON.flame} ${s}일 연속 한도 지킴</span></div>
     </div>
     <div class="top-actions">
@@ -234,7 +233,7 @@ function quizView() {
   if (current === undefined) {
     const right = ids.filter((id) => ans[id].correct).length;
     return `${sub}<section class="card quiz-done">${bar}
-      <img src="${CHAR(right >= 4 ? 'pose-cheer' : 'pose-balance')}" alt="">
+      ${mascot(right >= 4 ? 'cheer' : 'think', 140)}
       <div class="score num">${right} / 5</div>
       <p class="muted" style="margin:0">오늘 퀴즈 끝! 은행잎 ${right * 3}장을 받았어요.<br>내일 새 문제 5개가 열려요.</p>
       <div class="btn-row" style="width:100%"><button class="btn ghost" data-act="quiz-mode" data-m="wrong">오답 노트</button><button class="btn primary" data-act="tab" data-tab="shop">상점 가기</button></div>
@@ -257,7 +256,12 @@ function questionBlock(id, answered, act) {
 }
 
 // ───────────────────────── 코치 ─────────────────────────
-const SUGGEST = ['이번 주 지출 계획 짜 줘', '금요일에 떡볶이 먹어도 돼?', '목표를 더 빨리 이루려면?'];
+// 추천 질문의 요일은 항상 이번 용돈 주기 안에 들어오게 고른다.
+const suggestions = (st) => {
+  const d = addDays(today, Math.min(2, st.daysLeft - 1));
+  const when = d === today ? '오늘' : `${DAY_NAMES[weekday(d)]}요일에`;
+  return ['이번 주 지출 계획 짜 줘', `${when} 떡볶이 먹어도 돼?`, '목표를 더 빨리 이루려면?'];
+};
 
 function planBlock(plan, today0) {
   if (!plan?.length) return '';
@@ -267,14 +271,14 @@ function planBlock(plan, today0) {
 }
 
 function coachView() {
-  const face = `<span class="avatar"><img src="${CHAR('face-joy')}" alt=""></span>`;
+  const face = `<span class="avatar">${mascot('joy', 36, '')}</span>`;
   const hello = `<div class="bot-row">${face}<div class="msg bot">안녕! 나는 돈구리야. 용돈을 어떻게 나눠 쓸지 같이 고민해 줄게.\n계산은 앱이 정확하게 하고, 나는 쉽게 설명해 줄게.</div></div>`;
   const msgs = state.chat.map((m) => m.role === 'user'
     ? `<div class="msg me">${esc(m.text)}</div>`
     : `<div class="bot-row">${face}<div class="msg bot">${esc(m.text)}${planBlock(m.plan, m.today)}<span class="src">${m.source === 'claude' ? 'Claude가 답했어요 · 숫자는 앱이 계산' : (state.coachKey ? '예시 답변 · 연결이 안 돼서 앱이 바로 답했어요' : '예시 답변 · 설정에서 Claude API 키를 넣으면 AI가 답해요')}</span></div></div>`).join('');
   const busy = view.coachBusy ? `<div class="bot-row">${face}<div class="msg bot"><span class="typing" aria-label="생각 중"><i></i><i></i><i></i></span></div></div>` : '';
   return `<div class="chat" id="chat">${hello}${msgs}${busy}</div>
-    <div class="chips">${SUGGEST.map((s) => `<button class="chip" data-act="ask" data-q="${esc(s)}" ${view.coachBusy ? 'disabled' : ''}>${s}</button>`).join('')}</div>`;
+    <div class="chips">${suggestions(dayStatus(state, today)).map((s) => `<button class="chip" data-act="ask" data-q="${esc(s)}" ${view.coachBusy ? 'disabled' : ''}>${s}</button>`).join('')}</div>`;
 }
 
 // ───────────────────────── 상점 ─────────────────────────
@@ -288,7 +292,7 @@ function shopView() {
       const worn = state.equipped[i.kind] === i.id;
       return `<button class="goods ${worn ? 'worn' : ''}" data-act="goods" data-id="${i.id}">
         ${worn ? '<span class="badge tag" style="background:var(--blue);color:#fff">착용 중</span>' : owned ? '<span class="badge tag plain">보유</span>' : ''}
-        <span class="pic"><img src="${i.img}" alt=""></span>
+        <span class="pic">${i.art}</span>
         <b>${esc(i.name)}</b>
         <span class="small muted">${esc(i.line)}</span>
         ${owned ? `<span class="small" style="font-weight:700;color:var(--blue)">${worn ? '눌러서 벗기' : '눌러서 입기'}</span>` : `<span class="price num">${leaf(16)} ${i.price}잎</span>`}
@@ -302,7 +306,7 @@ function buySheet() {
   const lack = i.price - state.leaves;
   return `<div class="grabber"></div>
     <div style="display:grid;justify-items:center;gap:8px;text-align:center">
-      <span class="pic" style="width:120px;height:120px;border-radius:24px;background:var(--hanji);display:grid;place-items:center"><img src="${i.img}" alt="" style="max-height:96px;width:auto"></span>
+      <span class="pic" style="width:120px;height:120px;border-radius:24px;background:var(--hanji);display:grid;place-items:center">${i.art}</span>
       <h3>${esc(i.name)}을(를) 구매할까요?</h3>
       <p class="muted" style="margin:0">${esc(i.line)}</p>
       <div class="preview" style="width:100%;text-align:left"><span class="row"><span>가격</span><span class="arrow num">${leaf(14)} ${i.price}잎</span></span>
@@ -365,11 +369,11 @@ function onbView() {
   const d = o.draft;
   if (o.step === 0) {
     return `<div class="welcome">
-      <div class="hero"><img class="tree" src="assets/char/hero-tree.jpg" alt="은행나무 아래 앉은 돈구리"></div>
+      <div class="hero" id="heroLeaves"><span class="hero-mascot">${mascot('cheer', 200)}</span><span class="badge plain hero-note">캐릭터는 나중에 확정돼요 · 지금은 임시 그림</span></div>
       <div class="copy">
         <h1 class="brand">돈구리</h1>
-        <p class="slogan">잎새 하나, 꿈 하나, 함께 쌓아가는 인연.</p>
-        <p class="muted" style="margin:0 0 10px">나는 은행나무 숲을 지키는 돈구리야. 매일 아침 오늘 써도 되는 돈을 알려 주고, 아낀 돈은 네 꿈으로 옮겨 줄게.</p>
+        <p class="slogan">오늘 써도 되는 돈, 매일 한 숫자로.</p>
+        <p class="muted" style="margin:0 0 10px">나는 돈구리야. 매일 아침 오늘 써도 되는 돈을 알려 주고, 아낀 돈은 네 목표로 옮겨 줄게.</p>
         <button class="btn primary block" data-act="onb-next">시작하기</button>
         <button class="btn text" data-act="demo-load">시연 데이터로 둘러보기</button>
       </div></div>`;
@@ -404,7 +408,7 @@ function onbView() {
   } else {
     const st = dayStatus({ ...blankState(), settings: d, startDate: today, autoSaved: d.savePerCycle }, today);
     body = `<div class="result-big">
-        <img src="${CHAR('pose-wish')}" alt="돈구리">
+        ${mascot('joy', 160)}
         <span class="muted">오늘 써도 되는 돈</span>
         <span class="big num">${won(st.limit)}</span>
         <p class="muted" style="margin:0">${unit}마다 ${won(d.allowance)}에서 고정 지출 ${won(d.fixed)}과<br>저축 ${won(d.savePerCycle)}을 먼저 빼고 나눴어요.<br>아낀 돈은 다음 날 한도로 돌아와요.</p>

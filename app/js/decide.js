@@ -1,6 +1,6 @@
 // 살까 말까 판단 카드 계산. 화면과 저장소를 모르는 순수 함수만 둔다.
 // 숫자는 모두 롤링 한도 엔진(budget.js)에서 나오고, 여기서는 "샀다면 / 참았다면"을 비교한다.
-import { addDays, dayStatus, goalProgress, cycleRange } from './budget.js';
+import { addDays, diffDays, dayStatus, goalProgress, cycleRange, fixedPerCycle } from './budget.js';
 
 // 자주 고민하는 물건 칩(기획서 v3 초안). 금액은 사용자가 고치면 그 금액을 기억한다.
 export const CHIPS = [
@@ -23,6 +23,7 @@ const batchim = (word) => {
   return c >= 0 && c <= 11171 ? c % 28 : 0;
 };
 export const iGa = (w) => `${w}${batchim(w) ? '이' : '가'}`;
+export const eul = (w) => `${w}${batchim(w) ? '을' : '를'}`;
 export const ro = (w) => { const b = batchim(w); return `${w}${b && b !== 8 ? '으로' : '로'}`; };
 
 export function chipList(prefs = {}) {
@@ -48,7 +49,7 @@ export function needPerCycle(settings) {
 // 쓰는 요일을 정했으면 쓰는 날을 줄이는 안도 함께 돌려준다.
 export function tightPlan(settings, saved = 0) {
   const days = settings.cycle === 'monthly' ? 30 : 7;
-  const free = settings.allowance - settings.fixed;
+  const free = settings.allowance - fixedPerCycle(settings);
   const money = free - settings.savePerCycle;
   const n = needPerCycle(settings);
   const base = { ...n, money, daily: Math.floor(money / days), min: MIN_DAILY };
@@ -191,4 +192,34 @@ export function weekStats(state, today) {
     keptMoney: kept.reduce((t, w) => t + (w.kept ?? w.amount), 0),
     top: topName && counts[topName] > 1 ? { name: topName, n: counts[topName] } : null,
   };
+}
+
+// 목표 기간 추천: 용돈 − 고정 지출 − 쓰는 날에 필요한 돈 = 저축할 수 있는 최대 금액.
+// 그 안에서 빠르게 / 적당히 / 여유 있게 세 가지 저축액과 실제 날짜를 계산한다.
+// 시작하는 날 첫 저축이 바로 들어가므로 n번 모으는 날은 시작일 + (n − 1)주기.
+const cycleDays = (settings) => (settings.cycle === 'monthly' ? 30 : 7);
+export function saveRoom(settings) {
+  const free = settings.allowance - fixedPerCycle(settings);
+  return Math.max(0, Math.floor((free - needPerCycle(settings).need) / 100) * 100);
+}
+export function goalOptions(settings, today, saved = 0) {
+  const room = saveRoom(settings);
+  const rem = Math.max(0, settings.goalAmount - saved);
+  if (room <= 0 || rem <= 0) return { room, options: [] };
+  const plan = (key, label, save) => {
+    const times = Math.ceil(rem / save);
+    return { key, label, savePerCycle: save, times, date: addDays(today, (times - 1) * cycleDays(settings)) };
+  };
+  const r100 = (n) => Math.max(100, Math.floor(n / 100) * 100);
+  const options = [plan('fast', '빠르게', room), plan('mid', '적당히', r100(room * 0.7)), plan('easy', '여유 있게', r100(room * 0.5))]
+    .filter((o, i, a) => a.findIndex((x) => x.savePerCycle === o.savePerCycle) === i);
+  return { room, options };
+}
+// 원하는 날짜까지 모으려면 주기마다 얼마씩 저축해야 하는지
+export function saveForDate(settings, today, date, saved = 0) {
+  const rem = Math.max(0, settings.goalAmount - saved);
+  const times = Math.max(1, Math.floor(diffDays(today, date) / cycleDays(settings)) + 1);
+  const save = Math.ceil(rem / times / 100) * 100;
+  const room = saveRoom(settings);
+  return { savePerCycle: save, times, ok: save <= room, room };
 }

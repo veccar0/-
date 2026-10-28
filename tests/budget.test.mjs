@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ymd, addDays, diffDays, cycleRange, dayStatus, goalProgress,
-  streak, level, quizIndexes,
+  streak, level, quizIndexes, fixedMonthly, fixedPerCycle,
 } from '../app/js/budget.js';
 
 const weekly = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
@@ -128,4 +128,15 @@ test('money left on rest days rolls over to the spend days', () => {
   const fri = dayStatus({ settings: s, startDate: '2026-11-02', entries: [], autoSaved: 15000 }, '2026-11-06');
   assert.equal(fri.cycleLeft, 5000);
   assert.ok(fri.limit > 2000);
+});
+
+test('monthly fixed costs are set aside every week, and stop after their end month', () => {
+  const items = [{ name: '교통카드 충전', amount: 30000, day: 1, until: null }, { name: '휴대폰 요금', amount: 13000, day: 25, until: '2026-11' }];
+  const s = { ...weekly, fixed: undefined, fixedItems: items };
+  assert.equal(fixedMonthly(s, '2026-11-02'), 43000);
+  assert.equal(fixedPerCycle(s, '2026-11-02'), 9900); // 43,000 × 12 ÷ 52 ≈ 9,923 → 9,900
+  assert.equal(fixedPerCycle(s, '2026-12-07'), 6900); // 휴대폰 요금이 끝난 뒤 30,000원만
+  assert.equal(fixedPerCycle({ ...s, cycle: 'monthly' }, '2026-11-02'), 43000);
+  assert.equal(dayStatus({ settings: s, startDate: '2026-11-02', entries: [], autoSaved: 0 }, '2026-11-02').spendable, 30000 - 9900 - 15000);
+  assert.equal(fixedPerCycle(weekly), 10000); // 예전 방식(주마다 금액)도 그대로
 });

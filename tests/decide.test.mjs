@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHIPS, chipList, judge, ruleLine, treeOf, goalDays, weekStats, iGa, ro, tightPlan } from '../app/js/decide.js';
+import { CHIPS, chipList, judge, ruleLine, treeOf, goalDays, weekStats, iGa, ro, tightPlan, goalOptions, saveForDate } from '../app/js/decide.js';
 
 const settings = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
 const spend = (date, amount) => ({ id: date + amount, date, type: 'spend', amount, category: 'snack' });
@@ -134,4 +134,18 @@ test('with spend days the tight check uses days × usual amount, and can suggest
   assert.equal(p.fix.savePerCycle, 14000);
   assert.equal(p.fewerDays, 2);
   assert.equal(tightPlan({ ...s, spendDays: [5, 6] }).tight, false); // 2일 × 2,000원 = 4,000원 ≤ 5,000원
+});
+
+test('goal period is recommended from what can really be saved', () => {
+  const s = { ...settings, spendDays: [5, 6], spendAmount: 2000 }; // 30,000 − 10,000 − 4,000 = 16,000원까지 저축 가능
+  const { room, options } = goalOptions(s, '2026-11-02');
+  assert.equal(room, 16000);
+  assert.deepEqual(options.map((o) => o.savePerCycle), [16000, 11200, 8000]);
+  assert.equal(options[0].times, 13); // 200,000 ÷ 16,000 = 12.5 → 13번
+  assert.equal(options[0].date, '2027-01-25'); // 첫 저축이 오늘이라 12주 뒤
+  const want = saveForDate(s, '2026-11-02', '2026-12-28');
+  assert.equal(want.times, 9);
+  assert.equal(want.savePerCycle, 22300);
+  assert.equal(want.ok, false);
+  assert.deepEqual(goalOptions({ ...s, allowance: 14000 }, '2026-11-02').options, []);
 });

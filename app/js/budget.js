@@ -32,7 +32,19 @@ export function cycleRange(settings, today) {
   return { start, end, days: diffDays(start, end) + 1 };
 }
 
-export const spendable = (s) => s.allowance - s.fixed - s.savePerCycle;
+// 고정 지출: 달마다 나가는 돈 목록(fixedItems: 이름, 월 금액, 나가는 날, 언제까지 'YYYY-MM' 또는 계속).
+// 주 용돈이면 한 달 금액을 주 단위로 바꿔(× 12 ÷ 52, 100원 단위) 매주 떼어 둔다. 끝난 항목은 그 달부터 빠진다.
+export function fixedMonthly(s, date = null) {
+  if (!Array.isArray(s.fixedItems)) return null;
+  const ym = date ? date.slice(0, 7) : null;
+  return s.fixedItems.filter((i) => !ym || !i.until || i.until >= ym).reduce((t, i) => t + i.amount, 0);
+}
+export function fixedPerCycle(s, date = null) {
+  const m = fixedMonthly(s, date);
+  if (m === null) return s.fixed || 0;
+  return s.cycle === 'monthly' ? m : Math.round((m * 12) / 52 / 100) * 100;
+}
+export const spendable = (s, date = null) => s.allowance - fixedPerCycle(s, date) - s.savePerCycle;
 
 // 요일별 비중: 주로 돈을 쓰는 요일(settings.spendDays)은 1, 나머지는 0.25. 정하지 않았으면 모든 날 1.
 export const REST_WEIGHT = 0.25;
@@ -45,7 +57,7 @@ const sumOn = (entries, pred) => entries.reduce((t, e) => (pred(e) ? t + e.amoun
 export function dayStatus(state, today) {
   const s = state.settings;
   const cycle = cycleRange(s, today);
-  const money = spendable(s);
+  const money = spendable(s, cycle.start);
   const inCycleBefore = (e) => e.date >= cycle.start && e.date < today;
   const usedBefore = sumOn(state.entries, (e) => inCycleBefore(e) && (e.type === 'spend' || e.type === 'save'));
   // 용돈 말고 추가로 받은 돈(세뱃돈, 심부름 값)은 받은 날부터 이번 주기 쓸 돈에 더해진다.

@@ -174,7 +174,10 @@ export function resolveHold(state, today, id, outcome) {
 }
 
 // 시연용 김도연의 2주. 날짜는 오늘 기준으로 만든다.
-const DEMO_SETTINGS = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000, goalDate: null };
+const DEMO_SETTINGS = {
+  cycle: 'weekly', payday: 1, allowance: 30000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000, goalDate: null,
+  fixedItems: [{ name: '교통카드 충전', amount: 30000, day: 1, until: null }, { name: '휴대폰 요금', amount: 13000, day: 25, until: null }],
+};
 // 오늘로부터 며칠 전, [금액, 카테고리, 이름, 고민 끝에 샀는지]
 const DEMO_DAYS = [
   [13, [[3000, 'friends', '떡볶이', true]]],
@@ -209,7 +212,7 @@ export function demoState(today) {
       else record(s, d, amount, cat, name);
     }
     for (const [kAgo, name, amount, cat] of DEMO_KEPT) if (kAgo === ago) worry(s, d, { name, amount, cat }, 'skip');
-    if (ago === 4) saveMoney(s, d, 1200);
+    if (ago === 4) saveMoney(s, d, 1300);
   }
   newDay(s, today);
   s.leaves = 42;

@@ -242,6 +242,22 @@ img { max-width: 100%; display: block; }
 .quiz-done svg { display: block; }
 .score { font-size: 36px; font-weight: 800; }
 
+/* ── 매달 나가는 돈 · 목표 기간 추천 ── */
+.fx-list { display: grid; gap: 6px; }
+.fx-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; background: var(--card); border-radius: 14px; padding: 10px 12px; box-shadow: inset 0 0 0 1px var(--line); }
+.fx-item b { display: block; font-size: 15px; }
+.fx-item small { color: var(--sub); font-size: 12px; }
+.fx-item .del { color: var(--faint); font-size: 12px; padding: 6px 8px; border-radius: 8px; }
+.fx-form { display: grid; gap: 8px; background: var(--soft); border-radius: 16px; padding: 12px; }
+.fx-form .input, .fx-form .chip { background: var(--card); }
+.fx-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.plan-opt { display: grid; gap: 2px; text-align: left; background: var(--soft); border-radius: 16px; padding: 12px; box-shadow: inset 0 0 0 1.5px transparent; }
+.plan-opt b { font-size: 14px; }
+.plan-opt span { font-size: 15px; font-weight: 800; }
+.plan-opt small { font-size: 12px; color: var(--sub); }
+.plan-opt[aria-pressed="true"] { background: var(--blue-tint); box-shadow: inset 0 0 0 2px var(--blue); }
+
 /* ── 살까 말까 ── */
 .ask { display: grid; grid-template-columns: 76px 1fr 24px; align-items: center; gap: 12px; text-align: left; background: var(--blue); color: #fff; border-radius: 24px; padding: 14px 18px 14px 12px; box-shadow: 0 10px 24px rgba(47, 111, 237, .28); transition: transform .08s; }
 .ask:active { transform: scale(.98); }

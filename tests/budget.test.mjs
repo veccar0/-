@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ymd, addDays, diffDays, cycleRange, dayStatus, goalProgress,
-  streak, level, rewardFor, quizIndexes,
+  streak, level, quizIndexes,
 } from '../app/js/budget.js';
 
 const weekly = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
@@ -90,26 +90,6 @@ test('level rises every three streak days up to 8', () => {
   assert.equal(level(5), 2);
   assert.equal(level(6), 3);
   assert.equal(level(99), 8);
-});
-
-test('record reward is 1 leaf, at most 5 per day, none under 100 won', () => {
-  const log = Array.from({ length: 5 }, () => ({ date: '2026-11-02', action: 'record', amount: 1 }));
-  assert.equal(rewardFor(base(), 'record', '2026-11-02', 3000), 1);
-  assert.equal(rewardFor(base(), 'record', '2026-11-02', 90), 0);
-  assert.equal(rewardFor(base([], { rewardLog: log }), 'record', '2026-11-02', 3000), 0);
-  assert.equal(rewardFor(base([], { rewardLog: log }), 'record', '2026-11-03', 3000), 1);
-});
-
-test('save reward is 2 leaves once a day', () => {
-  const log = [{ date: '2026-11-02', action: 'save', amount: 2 }];
-  assert.equal(rewardFor(base(), 'save', '2026-11-02'), 2);
-  assert.equal(rewardFor(base([], { rewardLog: log }), 'save', '2026-11-02'), 0);
-});
-
-test('quiz rewards: 3 first try, 1 on retry, 5 for a no-spend day', () => {
-  assert.equal(rewardFor(base(), 'quiz', '2026-11-02'), 3);
-  assert.equal(rewardFor(base(), 'retry', '2026-11-02'), 1);
-  assert.equal(rewardFor(base(), 'nospend', '2026-11-02'), 5);
 });
 
 test('daily quiz rotation shows 5 questions and covers all 30 in 6 days', () => {

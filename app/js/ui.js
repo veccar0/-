@@ -1,4 +1,4 @@
-// 화면 공통 도우미: 글자 이스케이프, 금액 표시, 아이콘, 토스트, 은행잎 효과.
+// 화면 공통 도우미: 글자 이스케이프, 금액 표시, 아이콘, 은행나무, 토스트, 은행잎 효과.
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
@@ -12,7 +12,7 @@ export const leaf = (size = 16, fill = 'var(--leaf)', stroke = 'var(--leaf-deep)
 export const ICON = {
   home: svg('<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>'),
   quiz: svg('<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/>'),
-  coach: svg('<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01" stroke-width="2.6"/>'),
+  log: svg('<rect x="4.5" y="3.5" width="15" height="17" rx="3"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>'),
   shop: svg('<path d="M5 8h14l-1.2 11.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/>'),
   gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>', 22),
   close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 22),
@@ -77,3 +77,19 @@ export function leafFall(container, count = 8) {
     setTimeout(() => el.remove(), 4600);
   }
 }
+
+// 돈구리의 은행나무 4단계: 0 새싹 · 1 어린 나무 · 2 큰 나무 · 3 열매
+const LEAF_D = 'M12 22V14C6.5 14 2.5 9.5 3 4.5C6.5 2.5 10 4 12 7C14 4 17.5 2.5 21 4.5C21.5 9.5 17.5 14 12 14';
+const gl = (x, y, s, r) => `<path d="${LEAF_D}" transform="translate(${x} ${y}) rotate(${r}) scale(${s}) translate(-12 -22)" fill="var(--leaf)" stroke="var(--leaf-deep)" stroke-width="${(1.3 / s).toFixed(2)}" stroke-linejoin="round"/>`;
+const blob = (circles) => circles.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('');
+const TREE = [
+  () => `<path d="M60 104V84" stroke="#8A6A3B" stroke-width="3" stroke-linecap="round"/>${gl(60, 87, 1.1, -32)}${gl(60, 87, 1.1, 32)}`,
+  () => `<path d="M57 104h6l-1-34h-4z" fill="#8A6A3B"/><g fill="#FBE29A">${blob([[60, 60, 22], [45, 70, 14], [75, 70, 14]])}</g>
+    ${[[52, 58, -20], [66, 54, 15], [60, 70, 0], [46, 72, -35], [75, 71, 35]].map(([x, y, r]) => gl(x, y, 0.7, r)).join('')}`,
+  () => `<path d="M55 104h10l-2-40h-6z" fill="#8A6A3B"/><path d="M60 78 44 66M60 72l15-11" stroke="#8A6A3B" stroke-width="4" stroke-linecap="round"/>
+    <g fill="#FBE29A">${blob([[60, 44, 28], [37, 58, 19], [83, 58, 19], [60, 64, 20]])}</g>
+    ${[[50, 38, -20], [68, 34, 18], [60, 52, 0], [38, 58, -35], [82, 57, 35], [48, 64, -10], [72, 64, 12], [60, 24, 0]].map(([x, y, r]) => gl(x, y, 0.75, r)).join('')}`,
+];
+TREE[3] = () => `${TREE[2]()}<g fill="#E9A23B" stroke="#B9741A" stroke-width="1">${blob([[45, 50, 3.8], [72, 46, 3.8], [58, 60, 3.8], [83, 63, 3.8], [36, 64, 3.8], [64, 34, 3.8]])}</g>`;
+export const treeSvg = (stage, size = 120) =>
+  `<svg viewBox="0 0 120 112" width="${size}" height="${Math.round(size * 112 / 120)}" aria-hidden="true"><ellipse cx="60" cy="105" rx="42" ry="6" fill="rgba(120,90,40,.13)"/>${TREE[Math.max(0, Math.min(3, stage))]()}</svg>`;

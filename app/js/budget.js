@@ -1,4 +1,4 @@
-// 돈 계산과 보상 규칙. 화면과 저장소를 모르는 순수 함수만 둔다.
+// 돈 계산 규칙. 화면과 저장소를 모르는 순수 함수만 둔다.
 // 날짜는 기기 로컬 달력 날짜 문자열 'YYYY-MM-DD'로 다룬다.
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -58,7 +58,7 @@ export function dayStatus(state, today) {
 
 export function goalProgress(state) {
   const extra = sumOn(state.entries, (e) => e.type === 'save');
-  const saved = state.autoSaved + extra;
+  const saved = Math.max(0, state.autoSaved + extra);
   const amount = state.settings.goalAmount;
   return { saved, amount, ratio: amount > 0 ? Math.min(1, saved / amount) : 0, remaining: Math.max(0, amount - saved) };
 }
@@ -74,19 +74,6 @@ export function streak(state, today) {
 }
 
 export const level = (days) => Math.min(8, 1 + Math.floor(days / 3));
-
-export const REWARD = { quiz: 3, retry: 1, record: 1, save: 2, nospend: 5 };
-const DAILY_CAP = { record: 5, save: 2 };
-
-export function rewardFor(state, action, today, amount = 0) {
-  if (action === 'record' && amount < 100) return 0;
-  const cap = DAILY_CAP[action];
-  if (cap !== undefined) {
-    const got = sumOn(state.rewardLog, (r) => r.date === today && r.action === action);
-    if (got + REWARD[action] > cap) return 0;
-  }
-  return REWARD[action];
-}
 
 export function quizIndexes(today, total = 30, perDay = 5) {
   const day = diffDays('1970-01-01', today);

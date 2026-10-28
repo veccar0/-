@@ -188,7 +188,7 @@ const DEMO_DAYS = [
   [5, []],
   [4, [[300, 'snack', '사탕', true]]],
   [3, []],
-  [2, [[500, 'cafe', '우유', true]]],
+  [2, [[300, 'cafe', '우유', true]]],
   [1, []],
 ];
 // 참은 고민: [며칠 전, 이름, 금액, 카테고리]
@@ -199,7 +199,8 @@ export function demoState(today) {
   const start = addDays(today, -13);
   s.startDate = start;
   // 시연하는 날이 언제든 용돈 주기 5일째가 되도록 받는 요일을 맞춘다.
-  setupBudget(s, { ...DEMO_SETTINGS, payday: weekday(addDays(today, -4)) }, start);
+  // 쓰는 요일은 시연하는 날(금요일 이야기)과 다음 날(토요일)로 맞춘다.
+  setupBudget(s, { ...DEMO_SETTINGS, payday: weekday(addDays(today, -4)), spendDays: [weekday(today), weekday(addDays(today, 1))], spendAmount: 2000 }, start);
   for (const [ago, items] of DEMO_DAYS) {
     const d = addDays(today, -ago);
     newDay(s, d);
@@ -208,7 +209,7 @@ export function demoState(today) {
       else record(s, d, amount, cat, name);
     }
     for (const [kAgo, name, amount, cat] of DEMO_KEPT) if (kAgo === ago) worry(s, d, { name, amount, cat }, 'skip');
-    if (ago === 4) saveMoney(s, d, 1000);
+    if (ago === 4) saveMoney(s, d, 1200);
   }
   newDay(s, today);
   s.leaves = 42;

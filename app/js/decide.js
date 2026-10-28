@@ -30,24 +30,40 @@ export function chipList(prefs = {}) {
     .sort((a, b) => b.count - a.count || a.i - b.i);
 }
 
-// 하루에 쓸 돈이 가장 싼 고민 칩보다 적으면 빠듯한 계획이다.
+// 빠듯함 기준. 쓰는 요일과 그날 쓰는 돈을 정했으면 "쓰는 날 수 × 그날 쓰는 돈"이 한 주기에 필요한 돈이고,
+// 정하지 않았으면 매일 가장 싼 고민 칩(1,500원)을 살 수 있어야 한다.
 export const MIN_DAILY = Math.min(...CHIPS.map((c) => c.amount));
+export const DEFAULT_SPEND = 2000;
 
-// 빠듯한 계획이면 하루 MIN_DAILY원이 되도록 주기 저축을 줄인 안과, 그 대가(목표가 늦어지는 날)를 함께 돌려준다.
+export function needPerCycle(settings) {
+  const days = settings.cycle === 'monthly' ? 30 : 7;
+  const n = Array.isArray(settings.spendDays) ? settings.spendDays.length : 0;
+  if (n === 0 || n === 7) return { need: MIN_DAILY * days, perDay: MIN_DAILY, nDays: days, custom: false };
+  const nDays = settings.cycle === 'monthly' ? Math.round((n * 30) / 7) : n;
+  const perDay = settings.spendAmount || DEFAULT_SPEND;
+  return { need: perDay * nDays, perDay, nDays, custom: true };
+}
+
+// 빠듯한 계획이면 필요한 돈이 되도록 주기 저축을 줄인 안과 그 대가(목표가 늦어지는 날),
+// 쓰는 요일을 정했으면 쓰는 날을 줄이는 안도 함께 돌려준다.
 export function tightPlan(settings, saved = 0) {
   const days = settings.cycle === 'monthly' ? 30 : 7;
   const free = settings.allowance - settings.fixed;
-  const daily = Math.floor((free - settings.savePerCycle) / days);
-  if (daily >= MIN_DAILY) return { daily, tight: false, min: MIN_DAILY };
-  const save = Math.max(0, Math.floor((free - MIN_DAILY * days) / 100) * 100);
-  if (save >= settings.savePerCycle) return { daily, tight: true, min: MIN_DAILY, fix: null };
-  const rem = Math.max(0, settings.goalAmount - saved);
-  const before = goalDays(rem, settings, days);
-  const after = goalDays(rem, { ...settings, savePerCycle: save }, days);
-  return {
-    daily, tight: true, min: MIN_DAILY,
-    fix: { savePerCycle: save, daily: Math.floor((free - save) / days), enough: free - save >= MIN_DAILY * days, later: before === null || after === null ? null : after - before },
-  };
+  const money = free - settings.savePerCycle;
+  const n = needPerCycle(settings);
+  const base = { ...n, money, daily: Math.floor(money / days), min: MIN_DAILY };
+  if (money >= n.need) return { ...base, tight: false };
+  const save = Math.max(0, Math.floor((free - n.need) / 100) * 100);
+  let fix = null;
+  if (save < settings.savePerCycle) {
+    const rem = Math.max(0, settings.goalAmount - saved);
+    const before = goalDays(rem, settings, days);
+    const after = goalDays(rem, { ...settings, savePerCycle: save }, days);
+    fix = { savePerCycle: save, money: free - save, daily: Math.floor((free - save) / days), enough: free - save >= n.need, later: before === null || after === null ? null : after - before };
+  }
+  const fit = Math.floor(Math.max(0, money) / n.perDay);
+  const fewerDays = n.custom && settings.cycle !== 'monthly' && fit >= 1 && fit < n.nDays ? fit : null;
+  return { ...base, tight: true, fix, fewerDays };
 }
 
 // 지금 속도(주기마다 자동 저축)로 남은 금액을 모으는 데 걸리는 날 수. 저축이 0이면 알 수 없음(null).

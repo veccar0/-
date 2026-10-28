@@ -34,6 +34,12 @@ export function cycleRange(settings, today) {
 
 export const spendable = (s) => s.allowance - s.fixed - s.savePerCycle;
 
+// 요일별 비중: 주로 돈을 쓰는 요일(settings.spendDays)은 1, 나머지는 0.25. 정하지 않았으면 모든 날 1.
+export const REST_WEIGHT = 0.25;
+export const hasSpendDays = (s) => Array.isArray(s.spendDays) && s.spendDays.length > 0 && s.spendDays.length < 7;
+export const dayWeight = (s, d) => (!hasSpendDays(s) || s.spendDays.includes(weekday(d)) ? 1 : REST_WEIGHT);
+const weightSum = (s, from, to) => { let t = 0; for (let d = from; d <= to; d = addDays(d, 1)) t += dayWeight(s, d); return t; };
+
 const sumOn = (entries, pred) => entries.reduce((t, e) => (pred(e) ? t + e.amount : t), 0);
 
 export function dayStatus(state, today) {
@@ -45,10 +51,12 @@ export function dayStatus(state, today) {
   // 용돈 말고 추가로 받은 돈(세뱃돈, 심부름 값)은 받은 날부터 이번 주기 쓸 돈에 더해진다.
   const income = sumOn(state.entries, (e) => e.type === 'income' && e.date >= cycle.start && e.date <= today);
   const daysLeft = diffDays(today, cycle.end) + 1;
-  const limit = Math.max(0, Math.floor((money + income - usedBefore) / daysLeft));
+  // 롤링 한도: 남은 돈을 오늘부터 주기 끝까지 요일 비중대로 나눈 오늘 몫
+  const w = dayWeight(s, today);
+  const limit = Math.max(0, Math.floor(((money + income - usedBefore) * w) / weightSum(s, today, cycle.end)));
   const spentToday = sumOn(state.entries, (e) => e.date === today && e.type === 'spend');
   const savedToday = sumOn(state.entries, (e) => e.date === today && e.type === 'save');
-  const baseLimit = Math.floor(money / cycle.days);
+  const baseLimit = Math.floor((money * w) / weightSum(s, cycle.start, cycle.end));
   return {
     limit, spentToday, savedToday,
     left: limit - spentToday - savedToday,

@@ -124,3 +124,14 @@ test('a tight plan suggests a smaller saving and shows how much later the goal g
   assert.equal(poor.fix.enough, false);
   assert.equal(tightPlan({ ...settings, allowance: 15000, savePerCycle: 0 }).fix, null);
 });
+
+test('with spend days the tight check uses days × usual amount, and can suggest fewer days', () => {
+  const s = { ...settings, spendDays: [2, 5, 6], spendAmount: 2000 }; // 화·금·토 2,000원 → 주 6,000원 필요
+  const p = tightPlan(s, 0);
+  assert.equal(p.custom, true);
+  assert.equal(p.need, 6000);
+  assert.equal(p.tight, true);
+  assert.equal(p.fix.savePerCycle, 14000);
+  assert.equal(p.fewerDays, 2);
+  assert.equal(tightPlan({ ...s, spendDays: [5, 6] }).tight, false); // 2일 × 2,000원 = 4,000원 ≤ 5,000원
+});

@@ -1,8 +1,8 @@
 // 돈구리 앱: 상태를 받아 화면을 다시 그리는 단순한 렌더 루프.
 // 중심 흐름은 "살까 말까?" → 판단 카드 → 살래·참을래·내일 다시 볼래 → 은행나무.
-import { addDays, diffDays, weekday, cycleRange, dayStatus, goalProgress, streak, level, quizIndexes, spendable } from './budget.js';
+import { addDays, diffDays, weekday, cycleRange, dayStatus, goalProgress, streak, level, quizIndexes, spendable, hasSpendDays, dayWeight } from './budget.js';
 import { load, save, blankState, todayOf, newDay, setupBudget, record, removeEntry, worry, pendingHolds, resolveHold, demoState, walletOf, canSpend, receive, canRemove } from './store.js';
-import { chipList, judge, ruleLine, treeOf, weekStats, isFood, TREE_STAGES, ro, tightPlan } from './decide.js';
+import { chipList, judge, ruleLine, treeOf, weekStats, isFood, TREE_STAGES, ro, tightPlan, needPerCycle, DEFAULT_SPEND } from './decide.js';
 import { QUIZ } from './quiz-data.js';
 import { SHOP, byId } from './shop-data.js';
 import { askLine } from './coach.js';
@@ -104,17 +104,27 @@ function homeView() {
   ${moneyCard(st)}`;
 }
 
+// 오늘이 쓰는 날인지, 아끼는 날이면 다음 쓰는 날이 언제인지
+function dayKind() {
+  const s = state.settings;
+  if (!hasSpendDays(s)) return '';
+  if (dayWeight(s, today) === 1) return '<small class="day-kind spend">오늘은 쓰는 날</small>';
+  let d = addDays(today, 1);
+  while (dayWeight(s, d) !== 1) d = addDays(d, 1);
+  return `<small class="day-kind">아끼는 날 · 다음 쓰는 날 ${DAY_NAMES[weekday(d)]}요일</small>`;
+}
+
 // 홈의 돈 카드: 오늘 써도 되는 돈 + 남은 잔액(이번 주기) + 저축통, 그리고 "썼어"·"받았어"
 function moneyCard(st) {
   const jar = goalProgress(state).saved;
   const tp = tightPlan(state.settings, jar);
   return `<section class="card money" aria-label="내 돈">
     <div class="money-top">
-      <div><span class="label">오늘 써도 되는 돈</span><b class="num ${st.left < 0 ? 'over' : ''}">${st.left < 0 ? `${won(-st.left)} 넘음` : won(st.left)}</b></div>
+      <div><span class="label">오늘 써도 되는 돈</span><b class="num ${st.left < 0 ? 'over' : ''}">${st.left < 0 ? `${won(-st.left)} 넘음` : won(st.left)}</b>${dayKind()}</div>
       <div class="bal"><span class="label">남은 잔액</span><b class="num">${won(Math.max(0, st.cycleLeft))}</b><small class="muted">이번 ${unitOf()} · ${st.daysLeft}일 남음</small>${st.cycleLeft < 0 ? `<small style="color:var(--over);font-weight:600">넘친 ${won(-st.cycleLeft)}은 주기가 끝날 때 저축통에서 빠져요</small>` : ''}</div>
     </div>
     <div class="money-sub"><span>${ICON.jar} 저축통 <b class="num">${won(jar)}</b></span><span>가진 돈 합계 <b class="num">${won(Math.max(0, walletOf(state, today)))}</b></span></div>
-    ${tp.tight ? `<button class="tight-note" data-act="open-settings">하루 ${won(tp.daily)}이면 빠듯해요 · 조정 방법 보기 ›</button>` : ''}
+    ${tp.tight ? `<button class="tight-note" data-act="open-settings">${tp.custom ? `쓰는 날에 쓸 돈이 ${won(tp.need - Math.max(0, tp.money))} 모자라요` : `하루 ${won(tp.daily)}이면 빠듯해요`} · 조정 방법 보기 ›</button>` : ''}
     <div class="btn-row"><button class="btn line" data-act="open-record">썼어</button><button class="btn line" data-act="open-income">받았어</button></div>
   </section>`;
 }
@@ -387,6 +397,8 @@ function settingsSheet() {
       <div class="field"><label for="setAllowance">${unit}마다 받는 용돈</label><div class="input-won"><input class="input num" id="setAllowance" inputmode="numeric" value="${s.allowance}"></div></div>
       <div class="field"><label for="setFixed">꼭 나가는 돈(고정 지출)</label><div class="input-won"><input class="input num" id="setFixed" inputmode="numeric" value="${s.fixed}"></div></div>
       <div class="field"><label for="setSave">${unit}마다 먼저 저축할 돈</label><div class="input-won"><input class="input num" id="setSave" inputmode="numeric" value="${s.savePerCycle}"></div></div>
+      <div class="field"><label>주로 돈 쓰는 요일</label><div class="days7">${DAY_NAMES.map((n, i) => `<button data-act="set-day" data-v="${i}" aria-pressed="${(view.sheet.spendDays || []).includes(i)}">${n}</button>`).join('')}</div></div>
+      <div class="field"><label for="setSpendAmt">그날 보통 쓰는 돈</label><div class="input-won"><input class="input num" id="setSpendAmt" inputmode="numeric" value="${s.spendAmount || DEFAULT_SPEND}"></div></div>
       <div class="field"><label for="setGoal">목표</label><input class="input" id="setGoal" value="${esc(s.goalName)}"></div>
       <div class="field"><label for="setGoalAmt">목표 금액</label><div class="input-won"><input class="input num" id="setGoalAmt" inputmode="numeric" value="${s.goalAmount}"></div></div>
       <div class="preview" id="setPreview"></div>
@@ -407,21 +419,26 @@ function settingsSheet() {
     </section>`;
 }
 
-// 하루 쓸 돈이 가장 싼 칩보다 적을 때: 저축을 줄이는 안과 그 대가를 같이 보여 준다.
+// 빠듯한 계획일 때: 필요한 돈과 쓸 돈을 비교하고, 저축을 줄이는 안(그 대가)과 쓰는 날을 줄이는 안을 보여 준다.
 function tightBlock(tp, unit, goalName, act) {
   if (!tp.tight) return '';
-  const head = `<span class="err">하루 ${won(tp.daily)}이면 ${won(tp.min)}짜리 간식도 하루 돈으로는 못 사요.</span>`;
-  if (!tp.fix) return `${head}<span class="muted small">고정 지출을 줄이거나, 용돈 말고 받은 돈을 홈의 "받았어"로 더해 보세요.</span>`;
+  const head = tp.custom
+    ? `<span class="err">쓰는 날 ${tp.nDays}일 × ${won(tp.perDay)} = ${unit}에 ${won(tp.need)}이 필요한데, 쓸 돈은 ${won(Math.max(0, tp.money))}이에요.</span>`
+    : `<span class="err">하루 ${won(tp.daily)}이면 ${won(tp.min)}짜리 간식도 하루 돈으로는 못 사요.</span>`;
+  const fewer = tp.fewerDays ? `<span class="muted small">또는 쓰는 날을 ${tp.fewerDays}일로 줄이면 저축은 그대로예요.</span>` : '';
+  if (!tp.fix) return `${head}${fewer}<span class="muted small">고정 지출을 줄이거나, 용돈 말고 받은 돈을 홈의 "받았어"로 더해 보세요.</span>`;
   const f = tp.fix;
   const cost = f.later === null ? '목표 날짜는 계산할 수 없어요' : f.later > 0 ? `${esc(goalName || '목표')}는 ${f.later}일 늦어져요` : '목표 날짜는 그대로예요';
-  return `${head}<span>저축을 ${unit}마다 <b>${won(f.savePerCycle)}</b>로 줄이면 하루 <b>${won(f.daily)}</b> · ${cost}</span>
+  const gain = tp.custom ? '쓰는 날 돈이 맞아요' : `하루 <b>${won(f.daily)}</b>`;
+  return `${head}<span>저축을 ${unit}마다 <b>${won(f.savePerCycle)}</b>로 줄이면 ${gain} · ${cost}</span>${fewer}
     ${f.enough ? '' : '<span class="muted small">저축을 0원으로 해도 빠듯해요. 받은 돈은 홈의 "받았어"로 더할 수 있어요.</span>'}
     <button class="btn leaf" data-act="${act}" data-v="${f.savePerCycle}" style="height:40px;font-size:14px;justify-self:start">이렇게 바꾸기</button>`;
 }
 
 function readSettingsForm() {
   const n = (id) => Math.max(0, Math.floor(Number(String(document.getElementById(id).value).replace(/[^\d]/g, '')) || 0));
-  return { ...state.settings, allowance: n('setAllowance'), fixed: n('setFixed'), savePerCycle: n('setSave'), goalName: document.getElementById('setGoal').value.trim() || '목표', goalAmount: n('setGoalAmt') };
+  const days = (view.sheet?.spendDays || []).slice().sort();
+  return { ...state.settings, allowance: n('setAllowance'), fixed: n('setFixed'), savePerCycle: n('setSave'), goalName: document.getElementById('setGoal').value.trim() || '목표', goalAmount: n('setGoalAmt'), spendDays: days.length ? days : null, spendAmount: n('setSpendAmt') || DEFAULT_SPEND };
 }
 
 function updateSettingsPreview() {
@@ -451,7 +468,7 @@ function onbView() {
         <button class="btn text" data-act="demo-load">시연 데이터로 둘러보기</button>
       </div></div>`;
   }
-  const steps = `<div class="steps">${[1, 2, 3, 4].map((n) => `<i class="${n <= o.step ? 'on' : ''}"></i>`).join('')}</div>`;
+  const steps = `<div class="steps">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= o.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = `<button class="icon-btn" data-act="onb-back" aria-label="뒤로">${ICON.back}</button>`;
   const unit = d.cycle === 'monthly' ? '달' : '주';
   let body = '', foot = '';
@@ -470,6 +487,17 @@ function onbView() {
       <p class="err" id="onbErr"></p>`;
     foot = `<div class="btn-row"><button class="btn ghost" data-act="onb-skip">없어요</button><button class="btn primary" data-act="onb-next">다음</button></div>`;
   } else if (o.step === 3) {
+    const n = needPerCycle(d);
+    const free = d.allowance - d.fixed;
+    const sum = !n.custom ? '<span class="muted">요일을 고르지 않으면 매일 똑같이 나눠요.</span>'
+      : n.need <= free ? `<span>쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${unit}에 약 <b>${won(n.need)}</b>. 나머지 <b>${won(free - n.need)}</b>까지 저축할 수 있어요.</span>`
+      : `<span class="err">쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${won(n.need)}인데, 고정 지출을 빼면 ${won(free)}이라 ${won(n.need - free)} 모자라요. 요일이나 금액을 줄여 볼까요?</span>`;
+    body = `<div><h1>주로 언제 돈을 써?</h1><p class="lead">고른 요일에 돈을 더 많이 나눠 줄게요. 안 쓰는 날에도 조금은 남겨 둬요.</p></div>
+      <div class="field"><label>돈 쓰는 요일 (여러 개 고르기)</label><div class="days7">${DAY_NAMES.map((nm, i) => `<button data-act="onb-spend-day" data-v="${i}" aria-pressed="${(d.spendDays || []).includes(i)}">${nm}</button>`).join('')}</div></div>
+      <div class="field"><label>그날은 보통 얼마쯤 써?</label><div class="chips">${[1000, 2000, 3000, 5000].map((v) => `<button class="chip" data-act="onb-spend-amt" data-v="${v}" aria-pressed="${d.spendAmount === v}">${comma(v)}원</button>`).join('')}</div></div>
+      <div class="preview">${sum}</div>`;
+    foot = `<div class="btn-row"><button class="btn ghost" data-act="onb-spend-skip">잘 모르겠어</button><button class="btn primary" data-act="onb-next">다음</button></div>`;
+  } else if (o.step === 4) {
     body = `<div><h1>무엇을 위해 모을까?</h1><p class="lead">고민될 때 "사면 목표가 며칠 늦어지는지" 보여 줄게요.</p></div>
       <div class="field"><label for="onbGoal">목표 이름</label><input class="input" id="onbGoal" placeholder="무선 이어폰" value="${esc(d.goalName || '')}"></div>
       <div class="field"><label for="onbGoalAmt">목표 금액</label><div class="input-won"><input class="input num" id="onbGoalAmt" inputmode="numeric" placeholder="200,000" value="${d.goalAmount || ''}"></div></div>
@@ -484,11 +512,11 @@ function onbView() {
         ${mascot('joy', 160)}
         <span class="muted">이번 ${unit} 자유롭게 쓸 돈</span>
         <span class="big num">${won(st.spendable)}</span>
-        <p class="muted" style="margin:0">${unit}마다 ${won(d.allowance)}에서 고정 지출 ${won(d.fixed)}과<br>저축 ${won(d.savePerCycle)}을 먼저 뺐어요.<br>사고 싶은 게 생기면 <b>"살까 말까?"</b>를 눌러 줘.<br>이 돈으로 3초 만에 따져 줄게.</p>
+        <p class="muted" style="margin:0">${unit}마다 ${won(d.allowance)}에서 고정 지출 ${won(d.fixed)}과<br>저축 ${won(d.savePerCycle)}을 먼저 뺐어요.<br>${hasSpendDays(d) ? `쓰는 날(${d.spendDays.slice().sort().map((i) => DAY_NAMES[i]).join('·')})에 더 많이 나눠 줄게.<br>` : ''}사고 싶은 게 생기면 <b>"살까 말까?"</b>를 눌러 줘.<br>이 돈으로 3초 만에 따져 줄게.</p>
       </div>`;
     foot = '<button class="btn primary block" data-act="onb-finish">돈구리 시작하기</button>';
   }
-  return `<div class="onb"><div style="display:grid;gap:14px">${o.step > 0 ? `<div class="row">${back}<span class="small muted">${o.step} / 4</span><span style="width:36px"></span></div>` : ''}${steps}</div>
+  return `<div class="onb"><div style="display:grid;gap:14px">${o.step > 0 ? `<div class="row">${back}<span class="small muted">${o.step} / 5</span><span style="width:36px"></span></div>` : ''}${steps}</div>
     <div class="onb-body">${body}</div><div>${foot}</div></div>`;
 }
 
@@ -511,7 +539,9 @@ function updateOnbPreview() {
   const unit = d.cycle === 'monthly' ? '달' : '주';
   const days = d.cycle === 'monthly' ? 30 : 7;
   if (money < 0) box.innerHTML = `<span class="err">저축이 쓸 수 있는 돈보다 ${won(-money)} 많아요. 기간을 늘려 볼까요?</span>`;
-  else box.innerHTML = `<span>${unit}마다 <b>${won(savePer)}</b> 저축하면 하루 약 <span class="arrow num">${won(Math.floor(money / days))}</span>씩 쓸 수 있어요.</span>`
+  else box.innerHTML = (hasSpendDays(d)
+    ? `<span>${unit}마다 <b>${won(savePer)}</b> 저축하면 ${unit}에 <span class="arrow num">${won(money)}</span>을 쓸 수 있어요. 쓰는 날에 더 많이 나눠 줄게요.</span>`
+    : `<span>${unit}마다 <b>${won(savePer)}</b> 저축하면 하루 약 <span class="arrow num">${won(Math.floor(money / days))}</span>씩 쓸 수 있어요.</span>`)
     + tightBlock(tightPlan({ ...d, savePerCycle: savePer, goalAmount: amt, goalName: document.getElementById('onbGoal')?.value }, 0), unit, document.getElementById('onbGoal')?.value, 'onb-apply-save');
 }
 
@@ -532,7 +562,7 @@ function render() {
   const scroll = main ? main.scrollTop : 0;
   const keepToasts = phone.querySelector('.toasts');
   if (!state.settings) {
-    if (!view.onb) view.onb = { step: 0, draft: { cycle: 'weekly', payday: weekday(today), allowance: 0, fixed: 0, goalName: '', goalAmount: 0, months: 3, savePerCycle: null } };
+    if (!view.onb) view.onb = { step: 0, draft: { cycle: 'weekly', payday: weekday(today), allowance: 0, fixed: 0, goalName: '', goalAmount: 0, months: 3, savePerCycle: null, spendDays: [5, 6], spendAmount: DEFAULT_SPEND } };
     phone.innerHTML = onbView() + sheetHtml();
     updateOnbPreview();
   } else {
@@ -604,7 +634,14 @@ function openJudge(item) {
 
 const ACT = {
   tab: (el) => { view.tab = el.dataset.tab; view.sheet = null; view.resetScroll = true; render(); },
-  'open-settings': () => open({ type: 'settings' }),
+  'open-settings': () => open({ type: 'settings', spendDays: [...(state.settings.spendDays || [])] }),
+  'set-day': (el) => {
+    const v = Number(el.dataset.v); const list = view.sheet.spendDays;
+    const i = list.indexOf(v);
+    if (i >= 0) list.splice(i, 1); else list.push(v);
+    el.setAttribute('aria-pressed', String(i < 0));
+    updateSettingsPreview();
+  },
   'open-record': () => open({ type: 'record', amount: '', cat: 'friends' }),
   'open-worry': () => open({ type: 'worry' }),
   'open-income': () => open({ type: 'income', amount: '', memo: '세뱃돈' }),
@@ -741,7 +778,7 @@ const ACT = {
       d.fixed = numIn('onbFixed');
       if (d.fixed >= d.allowance) return err('고정 지출이 용돈보다 같거나 많아요.');
     }
-    if (o.step === 3) {
+    if (o.step === 4) {
       d.goalName = document.getElementById('onbGoal').value.trim();
       d.goalAmount = numIn('onbGoalAmt');
       d.savePerCycle = numIn('onbSave');
@@ -753,6 +790,14 @@ const ACT = {
   },
   'onb-back': () => { view.onb.step = Math.max(0, view.onb.step - 1); render(); },
   'onb-skip': () => { view.onb.draft.fixed = 0; view.onb.step = 3; render(); },
+  'onb-spend-day': (el) => {
+    const d = view.onb.draft; const v = Number(el.dataset.v);
+    const list = d.spendDays || [];
+    d.spendDays = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+    render();
+  },
+  'onb-spend-amt': (el) => { view.onb.draft.spendAmount = Number(el.dataset.v); render(); },
+  'onb-spend-skip': () => { view.onb.draft.spendDays = null; view.onb.step = 4; render(); },
   'onb-cycle': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.cycle = el.dataset.v; d.payday = d.cycle === 'weekly' ? weekday(today) : Number(today.slice(8)) > 28 ? 1 : Number(today.slice(8)); render(); },
   'onb-payday': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.payday = Number(el.dataset.v); render(); },
   'onb-months': (el) => {
@@ -774,7 +819,7 @@ const ACT = {
   },
   'onb-finish': () => {
     const d = view.onb.draft;
-    setupBudget(state, { cycle: d.cycle, payday: d.payday, allowance: d.allowance, fixed: d.fixed, savePerCycle: d.savePerCycle, goalName: d.goalName, goalAmount: d.goalAmount }, today);
+    setupBudget(state, { cycle: d.cycle, payday: d.payday, allowance: d.allowance, fixed: d.fixed, savePerCycle: d.savePerCycle, goalName: d.goalName, goalAmount: d.goalAmount, spendDays: hasSpendDays(d) ? d.spendDays.slice().sort() : null, spendAmount: d.spendAmount || DEFAULT_SPEND }, today);
     state.quiz = { date: today, answered: {} };
     view.onb = null; view.resetScroll = true; persist(); render();
     toast(phone, `${won(d.savePerCycle)}을 먼저 저축통에 넣었어요`);

@@ -111,3 +111,21 @@ test('extra money received is added to this cycle from that day on', () => {
   assert.equal(dayStatus(base([income('2026-11-04', 10000)]), '2026-11-03').cycleLeft, 5000);
   assert.equal(dayStatus(base([income('2026-11-04', 10000)]), '2026-11-09').income, 0);
 });
+
+test('spend days get a bigger share of the rolling limit than rest days', () => {
+  const s = { ...weekly, spendDays: [5, 6] }; // 금·토
+  const st = (date) => dayStatus({ settings: s, startDate: '2026-11-02', entries: [], autoSaved: 15000 }, date);
+  // 월~일 비중: 0.25×5 + 1×2 = 3.25 → 월요일 5000×0.25/3.25
+  assert.equal(st('2026-11-02').limit, Math.floor(5000 * 0.25 / 3.25));
+  assert.equal(st('2026-11-06').limit, Math.floor(5000 * 1 / 2.25));
+  assert.equal(st('2026-11-08').limit, Math.floor(5000 * 0.25 / 0.25));
+  // 모든 날을 고르면(또는 안 고르면) 지금처럼 똑같이 나눈다
+  assert.equal(dayStatus({ settings: { ...weekly, spendDays: [0, 1, 2, 3, 4, 5, 6] }, startDate: '2026-11-02', entries: [], autoSaved: 0 }, '2026-11-02').limit, 714);
+});
+
+test('money left on rest days rolls over to the spend days', () => {
+  const s = { ...weekly, spendDays: [5, 6] };
+  const fri = dayStatus({ settings: s, startDate: '2026-11-02', entries: [], autoSaved: 15000 }, '2026-11-06');
+  assert.equal(fri.cycleLeft, 5000);
+  assert.ok(fri.limit > 2000);
+});

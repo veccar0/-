@@ -200,7 +200,7 @@ img { max-width: 100%; display: block; }
 
 /* ── 온보딩 ── */
 .onb { flex: 1; display: grid; grid-template-rows: auto 1fr auto; padding: 18px 22px 22px; padding-top: max(18px, env(safe-area-inset-top, 0px)); gap: 18px; overflow-y: auto; }
-.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .steps i { height: 4px; border-radius: 4px; background: var(--line); }
 .steps i.on { background: var(--blue); }
 .onb h1 { font-size: 24px; line-height: 1.35; margin: 0; font-weight: 800; text-wrap: balance; }
@@ -273,6 +273,8 @@ img { max-width: 100%; display: block; }
 .money b { font-size: 24px; font-weight: 800; }
 .money b.over { color: var(--over); font-size: 20px; }
 .money small { font-size: 12px; }
+.day-kind { color: var(--sub); font-weight: 600; margin-top: 2px; }
+.day-kind.spend { color: var(--blue); }
 .money-sub { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--soft); border-radius: 12px; padding: 9px 12px; font-size: 13px; color: var(--sub); }
 .money-sub span { display: inline-flex; align-items: center; gap: 4px; }
 .money-sub svg { width: 16px; height: 16px; }

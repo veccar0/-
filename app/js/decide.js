@@ -196,7 +196,7 @@ export function weekStats(state, today) {
 
 // 목표 기간 추천: 용돈 − 고정 지출 − 쓰는 날에 필요한 돈 = 저축할 수 있는 최대 금액.
 // 그 안에서 빠르게 / 적당히 / 여유 있게 세 가지 저축액과 실제 날짜를 계산한다.
-// 시작하는 날 첫 저축이 바로 들어가므로 n번 모으는 날은 시작일 + (n − 1)주기.
+// 날짜는 앱의 다른 곳(은행나무, 판단 카드)과 같은 goalDays로 계산한다. 시작하는 날 첫 저축이 바로 들어간다.
 const cycleDays = (settings) => (settings.cycle === 'monthly' ? 30 : 7);
 export function saveRoom(settings) {
   const free = settings.allowance - fixedPerCycle(settings);
@@ -207,8 +207,8 @@ export function goalOptions(settings, today, saved = 0) {
   const rem = Math.max(0, settings.goalAmount - saved);
   if (room <= 0 || rem <= 0) return { room, options: [] };
   const plan = (key, label, save) => {
-    const times = Math.ceil(rem / save);
-    return { key, label, savePerCycle: save, times, date: addDays(today, (times - 1) * cycleDays(settings)) };
+    const days = goalDays(Math.max(0, rem - save), { ...settings, savePerCycle: save }, cycleDays(settings));
+    return { key, label, savePerCycle: save, times: Math.ceil(rem / save), date: addDays(today, days) };
   };
   const r100 = (n) => Math.max(100, Math.floor(n / 100) * 100);
   const options = [plan('fast', '빠르게', room), plan('mid', '적당히', r100(room * 0.7)), plan('easy', '여유 있게', r100(room * 0.5))]
@@ -218,8 +218,9 @@ export function goalOptions(settings, today, saved = 0) {
 // 원하는 날짜까지 모으려면 주기마다 얼마씩 저축해야 하는지
 export function saveForDate(settings, today, date, saved = 0) {
   const rem = Math.max(0, settings.goalAmount - saved);
-  const times = Math.max(1, Math.floor(diffDays(today, date) / cycleDays(settings)) + 1);
-  const save = Math.ceil(rem / times / 100) * 100;
+  const len = cycleDays(settings);
+  const save = Math.ceil((rem * len) / (Math.max(0, diffDays(today, date)) + len) / 100) * 100;
+  const times = Math.ceil(rem / save);
   const room = saveRoom(settings);
   return { savePerCycle: save, times, ok: save <= room, room };
 }

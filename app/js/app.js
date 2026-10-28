@@ -398,61 +398,70 @@ function nextMonths(n = 12) {
   return out;
 }
 const fxList = () => (view.sheet?.type === 'settings' ? view.sheet.fixedItems : view.onb.draft.fixedItems);
+const fxUi = () => (view.sheet?.type === 'settings' ? view.sheet : view.onb);
 
 function fixedEditor(list, cycle) {
+  const ui = fxUi();
   const monthly = list.reduce((t, i) => t + i.amount, 0);
   const per = fixedPerCycle({ cycle, fixedItems: list });
-  return `<div class="fx-list">${list.length ? list.map((it, i) => `<div class="fx-item"><div><b>${esc(it.name)}</b>
-      <small>한 달 ${won(it.amount)} · 매월 ${it.day}일 · ${it.until ? `${ymLabel(it.until)}까지` : '계속'}</small></div>
-      <button class="del" data-act="fx-del" data-i="${i}">지우기</button></div>`).join('') : ''}</div>
-    ${list.length ? `<div class="preview"><span>한 달 <b>${won(monthly)}</b>${cycle === 'monthly' ? '' : ` → 주마다 약 <b>${won(per)}</b>씩 미리 떼어 둬요`}</span></div>` : ''}
+  const items = list.map((it, i) => `<div class="fx-item"><div><b>${esc(it.name)}</b>
+      <small>한 달 ${won(it.amount)} · 매월 ${it.day}일${it.until ? ` · ${ymLabel(it.until)}까지` : ''}</small></div>
+      <button class="del" data-act="fx-del" data-i="${i}" aria-label="${esc(it.name)} 지우기">지우기</button></div>`).join('');
+  const total = list.length ? `<p class="fx-total">한 달 <b>${won(monthly)}</b>${cycle === 'monthly' ? '' : ` · 주마다 약 ${won(per)}씩 떼어 둬요`}</p>` : '';
+  if (!ui.fxOpen) return `<div class="fx-list">${items}</div>${total}<button class="btn line block" data-act="fx-open">+ ${list.length ? '하나 더 ' : ''}추가하기</button>`;
+  return `<div class="fx-list">${items}</div>${total}
     <div class="fx-form">
-      <div class="chips">${FX_NAMES.map((n) => `<button class="chip" data-act="fx-name" data-v="${n}">${n}</button>`).join('')}</div>
+      <div class="chips scroll">${FX_NAMES.map((n) => `<button class="chip" data-act="fx-name" data-v="${n}">${n}</button>`).join('')}</div>
       <input class="input" id="fxName" maxlength="20" autocomplete="off" placeholder="무엇에 나가? (예: 휴대폰 요금)">
-      <div class="fx-row">
-        <div class="input-won"><input class="input num" id="fxAmt" inputmode="numeric" placeholder="한 달 금액"></div>
+      <div class="input-won"><input class="input num" id="fxAmt" inputmode="numeric" placeholder="한 달에 얼마?"></div>
+      ${ui.fxMore ? `<div class="fx-row">
         <select class="input" id="fxDay" aria-label="나가는 날">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">매월 ${i + 1}일</option>`).join('')}</select>
-      </div>
-      <select class="input" id="fxUntil" aria-label="언제까지"><option value="">언제까지: 계속 나가요</option>${nextMonths().map((ym) => `<option value="${ym}">${ymLabel(ym)}까지</option>`).join('')}</select>
-      <button class="btn line block" data-act="fx-add">+ ${list.length ? '하나 더 ' : ''}추가하기</button>
+        <select class="input" id="fxUntil" aria-label="언제까지"><option value="">계속 나가요</option>${nextMonths().map((ym) => `<option value="${ym}">${ymLabel(ym)}까지</option>`).join('')}</select>
+      </div>` : '<button class="btn text" data-act="fx-more" style="justify-self:start;padding:0">매월 1일 · 계속 나가요 <u>바꾸기</u></button>'}
+      <div class="btn-row"><button class="btn ghost" data-act="fx-cancel">취소</button><button class="btn primary" data-act="fx-add">추가</button></div>
     </div>`;
 }
 function readFxForm() {
   const amount = numIn('fxAmt');
   if (!amount) return null;
-  return { name: document.getElementById('fxName').value.trim() || '고정 지출', amount, day: Number(document.getElementById('fxDay').value), until: document.getElementById('fxUntil').value || null };
+  const day = document.getElementById('fxDay');
+  const until = document.getElementById('fxUntil');
+  return { name: document.getElementById('fxName').value.trim() || '고정 지출', amount, day: day ? Number(day.value) : 1, until: until?.value || null };
 }
 
 // ───────────────────────── 설정 ─────────────────────────
 function settingsSheet() {
   const s = state.settings;
   const unit = unitOf();
-  const f = (id, def) => esc(view.sheet.form?.[id] ?? def);
+  const sh = view.sheet;
+  const f = (id, def) => esc(sh.form?.[id] ?? def);
+  const next = readSettingsForm();
+  const days = (sh.spendDays || []).slice().sort();
+  const rows = [
+    ['allowance', `${unit}마다 받는 용돈`, won(next.allowance), `<div class="input-won"><input class="input num" id="setAllowance" inputmode="numeric" value="${f('setAllowance', s.allowance)}"></div>`],
+    ['fixed', '매달 나가는 돈', sh.fixedItems.length ? `한 달 ${won(fixedMonthly(next))}` : '없음', fixedEditor(sh.fixedItems, s.cycle)],
+    ['spend', '돈 쓰는 날', days.length ? `${days.map((i) => DAY_NAMES[i]).join('·')} · ${won(next.spendAmount)}` : '매일 똑같이',
+      `<div class="days7">${DAY_NAMES.map((n, i) => `<button data-act="set-day" data-v="${i}" aria-pressed="${days.includes(i)}">${n}</button>`).join('')}</div>
+       <div class="field"><label for="setSpendAmt">그날 보통 쓰는 돈</label><div class="input-won"><input class="input num" id="setSpendAmt" inputmode="numeric" value="${f('setSpendAmt', s.spendAmount || DEFAULT_SPEND)}"></div></div>`],
+    ['save', `${unit}마다 먼저 저축`, won(next.savePerCycle), `<div class="input-won"><input class="input num" id="setSave" inputmode="numeric" value="${f('setSave', s.savePerCycle)}"></div>`],
+    ['goal', '목표', `${esc(next.goalName)} · ${won(next.goalAmount)}`,
+      `<input class="input" id="setGoal" aria-label="목표 이름" value="${f('setGoal', s.goalName)}">
+       <div class="input-won"><input class="input num" id="setGoalAmt" aria-label="목표 금액" inputmode="numeric" value="${f('setGoalAmt', s.goalAmount)}"></div>`],
+  ];
+  const row = ([key, label, value, body]) => `<div class="set-row ${sh.open === key ? 'open' : ''}">
+      <button class="set-head" data-act="set-open" data-k="${key}" aria-expanded="${sh.open === key}"><span>${label}</span><b>${value}</b><i aria-hidden="true">›</i></button>
+      ${sh.open === key ? `<div class="set-body">${body}</div>` : ''}</div>`;
   return `<div class="row"><h3>설정</h3><button class="icon-btn" data-act="close" aria-label="닫기">${ICON.close}</button></div>
-    <section class="card" style="background:var(--soft);display:grid;gap:12px">
-      <h2>예산</h2>
-      <div class="field"><label for="setAllowance">${unit}마다 받는 용돈</label><div class="input-won"><input class="input num" id="setAllowance" inputmode="numeric" value="${f('setAllowance', s.allowance)}"></div></div>
-      <div class="field"><label>매달 꼭 나가는 돈</label>${fixedEditor(view.sheet.fixedItems, s.cycle)}</div>
-      <div class="field"><label for="setSave">${unit}마다 먼저 저축할 돈</label><div class="input-won"><input class="input num" id="setSave" inputmode="numeric" value="${f('setSave', s.savePerCycle)}"></div></div>
-      <div class="field"><label>주로 돈 쓰는 요일</label><div class="days7">${DAY_NAMES.map((n, i) => `<button data-act="set-day" data-v="${i}" aria-pressed="${(view.sheet.spendDays || []).includes(i)}">${n}</button>`).join('')}</div></div>
-      <div class="field"><label for="setSpendAmt">그날 보통 쓰는 돈</label><div class="input-won"><input class="input num" id="setSpendAmt" inputmode="numeric" value="${f('setSpendAmt', s.spendAmount || DEFAULT_SPEND)}"></div></div>
-      <div class="field"><label for="setGoal">목표</label><input class="input" id="setGoal" value="${f('setGoal', s.goalName)}"></div>
-      <div class="field"><label for="setGoalAmt">목표 금액</label><div class="input-won"><input class="input num" id="setGoalAmt" inputmode="numeric" value="${f('setGoalAmt', s.goalAmount)}"></div></div>
-      <div class="preview" id="setPreview"></div>
-      <button class="btn primary block" data-act="save-settings">저장하기</button>
-    </section>
-    <section class="card" style="background:var(--soft);display:grid;gap:10px">
-      <h2>돈구리 한마디 AI 연결</h2>
-      <p class="small muted" style="margin:0">Claude API 키를 넣으면 판단 카드의 한마디를 AI가 다듬어요. 숫자는 늘 앱이 계산해요. 키는 이 기기에만 저장되고, 이름 같은 개인정보는 보내지 않아요. 키가 없어도 규칙으로 만든 한마디가 나와요.</p>
-      <input class="input" id="setKey" type="password" autocomplete="off" placeholder="sk-ant-..." value="${esc(state.coachKey)}">
-      <button class="btn line block" data-act="save-key">키 저장</button>
-    </section>
-    <section class="card" style="background:var(--soft);display:grid;gap:10px">
-      <h2>시연</h2>
-      <p class="small muted" style="margin:0">지금 날짜: <b>${dateLabel(today)}</b>${state.devOffset ? ` (실제보다 ${state.devOffset}일 뒤)` : ''}</p>
-      <button class="btn line block" data-act="demo-load">시연 데이터 불러오기 (김도연의 2주)</button>
-      <button class="btn line block" data-act="demo-next">하루 넘기기</button>
-      <button class="btn danger block" data-act="ask-reset">처음부터 다시 하기</button>
+    <section class="set-group">${rows.map(row).join('')}</section>
+    <div class="preview" id="setPreview"></div>
+    <button class="btn primary block" data-act="save-settings">저장하기</button>
+    <section class="set-group">
+      ${row(['ai', '돈구리 한마디 AI', state.coachKey ? '연결됨' : '연결 안 됨', `<p class="small muted" style="margin:0">Claude API 키를 넣으면 판단 카드의 한마디를 AI가 다듬어요. 숫자는 늘 앱이 계산하고, 키는 이 기기에만 저장돼요.</p>
+        <input class="input" id="setKey" type="password" autocomplete="off" placeholder="sk-ant-..." value="${esc(state.coachKey)}">
+        <button class="btn line block" data-act="save-key">키 저장</button>`])}
+      ${row(['demo', '시연 도구', dateLabel(today), `<button class="btn line block" data-act="demo-load">시연 데이터 불러오기 (김도연의 2주)</button>
+        <button class="btn line block" data-act="demo-next">하루 넘기기</button>
+        <button class="btn danger block" data-act="ask-reset">처음부터 다시 하기</button>`])}
     </section>`;
 }
 
@@ -473,10 +482,13 @@ function tightBlock(tp, unit, goalName, act) {
 }
 
 function readSettingsForm() {
-  const n = (id) => Math.max(0, Math.floor(Number(String(document.getElementById(id).value).replace(/[^\d]/g, '')) || 0));
+  const s = state.settings;
+  const def = { setAllowance: s.allowance, setSave: s.savePerCycle, setGoal: s.goalName, setGoalAmt: s.goalAmount, setSpendAmt: s.spendAmount || DEFAULT_SPEND };
+  const raw = (id) => view.sheet.form?.[id] ?? def[id];
+  const n = (id) => Math.max(0, Math.floor(Number(String(raw(id)).replace(/[^\d]/g, '')) || 0));
   const days = (view.sheet?.spendDays || []).slice().sort();
   const { fixed, ...rest } = state.settings;
-  return { ...rest, fixedItems: view.sheet.fixedItems.map((x) => ({ ...x })), allowance: n('setAllowance'), savePerCycle: n('setSave'), goalName: document.getElementById('setGoal').value.trim() || '목표', goalAmount: n('setGoalAmt'), spendDays: days.length ? days : null, spendAmount: n('setSpendAmt') || DEFAULT_SPEND };
+  return { ...rest, fixedItems: view.sheet.fixedItems.map((x) => ({ ...x })), allowance: n('setAllowance'), savePerCycle: n('setSave'), goalName: String(raw('setGoal')).trim() || '목표', goalAmount: n('setGoalAmt'), spendDays: days.length ? days : null, spendAmount: n('setSpendAmt') || DEFAULT_SPEND };
 }
 
 function updateSettingsPreview() {
@@ -585,11 +597,16 @@ function updateOnbPreview() {
   }
   d.savePerCycle = chosen ? chosen.savePerCycle : null;
   d.goalDate = chosen ? chosen.date : null;
-  box.innerHTML = `<div class="field"><label>언제까지 모을까? 추천 기간</label><div class="plans">${options.map((o) => `<button class="plan-opt" data-act="onb-plan" data-k="${o.key}" aria-pressed="${d.plan === o.key}">
-      <b>${o.label}</b><span class="num">${fullDate(o.date)}</span><small>${unit}마다 ${won(o.savePerCycle)}</small></button>`).join('')}</div></div>
-    <div class="field"><label for="onbGoalDate">날짜를 직접 정할래</label><input class="input" type="date" id="onbGoalDate" min="${addDays(today, 1)}" value="${d.plan === 'custom' && d.customDate ? d.customDate : ''}"></div>
-    <div class="preview">${note || (chosen ? `<span>${unit}마다 <b>${won(chosen.savePerCycle)}</b>씩 ${chosen.times}번 모으면 <b>${fullDate(chosen.date)}</b>에 살 수 있어요.</span>` : '')}
-      <span class="muted small">고정 지출과 쓰는 날 돈을 빼면 ${unit}마다 최대 ${won(room)}까지 저축할 수 있어요.</span></div>`;
+  const label = d.plan === 'custom' ? '직접 정한 날짜' : `추천 · ${options.find((o) => o.key === d.plan).label}`;
+  const main = chosen
+    ? `<div class="goal-pick"><span class="small muted">${label}</span><b class="num">${fullDate(chosen.date)}</b><span>${unit}마다 <b>${won(chosen.savePerCycle)}</b>씩 모으면 살 수 있어요</span></div>`
+    : `<div class="preview">${note}</div>`;
+  const more = view.onb.planOpen ? `<div class="plans">${options.map((o) => `<button class="plan-opt" data-act="onb-plan" data-k="${o.key}" aria-pressed="${d.plan === o.key}">
+      <b>${o.label}</b><span class="num">${fullDate(o.date)}</span><small>${unit}마다 ${won(o.savePerCycle)}</small></button>`).join('')}</div>
+    <div class="field"><label for="onbGoalDate">날짜 직접 고르기</label><input class="input" type="date" id="onbGoalDate" min="${addDays(today, 1)}" value="${d.plan === 'custom' && d.customDate ? d.customDate : ''}"></div>
+    <p class="muted small" style="margin:0">고정 지출과 쓰는 날 돈을 빼면 ${unit}마다 최대 ${won(room)}까지 저축할 수 있어요.</p>`
+    : '<button class="btn text" data-act="onb-plan-more" style="justify-self:start;padding:0"><u>다른 기간 보기</u></button>';
+  box.innerHTML = `${main}${more}`;
 }
 
 // ───────────────────────── 렌더 ─────────────────────────
@@ -690,8 +707,7 @@ const ACT = {
     const v = Number(el.dataset.v); const list = view.sheet.spendDays;
     const i = list.indexOf(v);
     if (i >= 0) list.splice(i, 1); else list.push(v);
-    el.setAttribute('aria-pressed', String(i < 0));
-    updateSettingsPreview();
+    render();
   },
   'open-record': () => open({ type: 'record', amount: '', cat: 'friends' }),
   'open-worry': () => open({ type: 'worry' }),
@@ -826,8 +842,8 @@ const ACT = {
       if (d.allowance < 1000) return err('용돈 금액을 1,000원 이상으로 넣어 주세요.');
     }
     if (o.step === 2) {
-      const pending = readFxForm();
-      if (pending) d.fixedItems.push(pending);
+      const pending = o.fxOpen ? readFxForm() : null;
+      if (pending) { d.fixedItems.push(pending); o.fxOpen = false; }
       if (fixedPerCycle(d) >= d.allowance) { render(); return err('매달 나가는 돈이 용돈보다 같거나 많아요.'); }
     }
     if (o.step === 4) {
@@ -839,14 +855,22 @@ const ACT = {
     o.step += 1; render();
   },
   'onb-back': () => { view.onb.step = Math.max(0, view.onb.step - 1); render(); },
-  'onb-skip': () => { view.onb.draft.fixedItems = []; view.onb.step = 3; render(); },
+  'onb-skip': () => { view.onb.draft.fixedItems = []; view.onb.fxOpen = false; view.onb.step = 3; render(); },
   'fx-name': (el) => { const i = document.getElementById('fxName'); i.value = el.dataset.v; document.getElementById('fxAmt').focus(); },
+  'fx-open': () => { fxUi().fxOpen = true; fxUi().fxMore = false; render(); document.getElementById('fxName')?.focus(); },
+  'fx-more': () => {
+    const keep = { name: document.getElementById('fxName').value, amt: document.getElementById('fxAmt').value };
+    fxUi().fxMore = true; render();
+    document.getElementById('fxName').value = keep.name; document.getElementById('fxAmt').value = keep.amt;
+  },
+  'fx-cancel': () => { fxUi().fxOpen = false; render(); },
   'fx-add': () => {
     const it = readFxForm();
     if (!it) { document.getElementById('fxAmt').focus(); return; }
-    fxList().push(it); render();
+    fxList().push(it); fxUi().fxOpen = false; render();
   },
   'fx-del': (el) => { fxList().splice(Number(el.dataset.i), 1); render(); },
+  'onb-plan-more': () => { view.onb.planOpen = true; updateOnbPreview(); },
   'onb-plan': (el) => { const d = view.onb.draft; d.plan = el.dataset.k; d.customDate = null; updateOnbPreview(); },
   'onb-spend-day': (el) => {
     const d = view.onb.draft; const v = Number(el.dataset.v);
@@ -858,9 +882,10 @@ const ACT = {
   'onb-spend-skip': () => { view.onb.draft.spendDays = null; view.onb.step = 4; render(); },
   'onb-cycle': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.cycle = el.dataset.v; d.payday = d.cycle === 'weekly' ? weekday(today) : Number(today.slice(8)) > 28 ? 1 : Number(today.slice(8)); render(); },
   'onb-payday': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.payday = Number(el.dataset.v); render(); },
+  'set-open': (el) => { view.sheet.open = view.sheet.open === el.dataset.k ? null : el.dataset.k; view.sheet.fxOpen = false; render(); },
   'set-apply-save': (el) => {
-    document.getElementById('setSave').value = el.dataset.v;
     view.sheet.form.setSave = el.dataset.v;
+    view.sheet.open = 'save'; render();
     updateSettingsPreview();
   },
   'onb-finish': () => {

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { addDays } from '../app/js/budget.js';
 import { CHIPS, chipList, judge, ruleLine, treeOf, goalDays, weekStats, iGa, ro, tightPlan, goalOptions, saveForDate } from '../app/js/decide.js';
 
 const settings = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
@@ -142,7 +143,9 @@ test('goal period is recommended from what can really be saved', () => {
   assert.equal(room, 16000);
   assert.deepEqual(options.map((o) => o.savePerCycle), [16000, 11200, 8000]);
   assert.equal(options[0].times, 13); // 200,000 ÷ 16,000 = 12.5 → 13번
-  assert.equal(options[0].date, '2027-01-25'); // 첫 저축이 오늘이라 12주 뒤
+  // 첫 저축 16,000원은 오늘 들어가고 남은 184,000원은 하루 16,000/7원씩 → 81일 뒤. 은행나무·설정과 같은 계산
+  assert.equal(options[0].date, '2027-01-22');
+  assert.equal(options[0].date, addDays('2026-11-02', goalDays(184000, { ...s, savePerCycle: 16000 }, 7)));
   const want = saveForDate(s, '2026-11-02', '2026-12-28');
   assert.equal(want.times, 9);
   assert.equal(want.savePerCycle, 22300);

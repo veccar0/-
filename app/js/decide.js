@@ -60,12 +60,19 @@ export function treeOf(state, today) {
   return { saved, kept, ratio, stage, name: TREE_STAGES[stage], days: goalDays(g.remaining, state.settings, st.cycle.days) };
 }
 
-// 참은 돈 1,000원당 은행잎 1장(최소 1장). 이번 주기에 남은 돈까지만, 같은 물건은 하루 2번까지.
-export function leavesFor(state, today, name, amount) {
-  const same = worriesOf(state).filter((w) => w.resolvedOn === today && w.name === name && w.leaves > 0).length;
-  if (same >= 2) return 0;
-  const left = Math.max(0, dayStatus(state, today).cycleLeft);
-  return Math.max(1, Math.floor(Math.min(amount, left) / 1000));
+// 참을래로 새로 지키는 돈과 은행잎.
+// 이번 주기에 남은 돈 중 아직 "지킨 돈"으로 세지 않은 만큼만 지킬 수 있다(같은 돈을 두 번 세지 않음).
+// 은행잎은 이번 주기에 지킨 돈이 1,000원을 넘을 때마다 1장. 그래서 한 주기 은행잎은 쓸 돈 ÷ 1,000장을 넘지 못한다.
+// 같은 물건은 하루 2번까지만 센다.
+export function keepClaim(state, today, name, amount) {
+  const same = worriesOf(state).filter((w) => w.resolvedOn === today && w.name === name && w.outcome === 'skip').length;
+  const before = keptThisCycle(state, today);
+  const free = Math.max(0, dayStatus(state, today).cycleLeft - before);
+  if (same >= 2) return { kept: 0, leaves: 0, reason: 'same', free, toNext: 0 };
+  const kept = Math.min(amount, free);
+  const leaves = Math.floor((before + kept) / 1000) - Math.floor(before / 1000);
+  const reason = free === 0 ? 'empty' : leaves === 0 ? 'small' : null;
+  return { kept, leaves, reason, free, toNext: 1000 - ((before + kept) % 1000) };
 }
 
 // 같은 음식/물건 묶음에서 더 싼 칩 하나
@@ -88,7 +95,9 @@ export function judge(state, today, item) {
   const g = goalProgress(state);
   const len = st.cycle.days;
   const over = Math.max(0, amount - left);
-  const keep = Math.min(amount, left);
+  const claim = keepClaim(state, today, name, amount);
+  const keep = claim.kept;
+  const wallet = st.cycleLeft + g.saved;
   const goalNow = goalDays(g.remaining, state.settings, len);
   const goalBuy = goalDays(g.remaining + over, state.settings, len);
   const goalKeep = goalDays(Math.max(0, g.remaining - keep), state.settings, len);
@@ -100,7 +109,8 @@ export function judge(state, today, item) {
     goalName: state.settings.goalName, goalNow, goalBuy, goalKeep,
     later: goalNow === null ? null : goalBuy - goalNow,
     sooner: goalNow === null ? null : goalNow - goalKeep,
-    leaves: leavesFor(state, today, name, amount),
+    leaves: claim.leaves, leafReason: claim.reason, toNext: claim.toNext,
+    canBuy: amount <= wallet, short: Math.max(0, amount - wallet),
     repeat: worriesOf(state).filter((w) => w.name === name && ok(w.date)).length,
     alt: altFor(item, left, state.chipPrefs),
     unit: state.settings.cycle === 'monthly' ? '달' : '주',
@@ -109,6 +119,9 @@ export function judge(state, today, item) {
 
 // 돈구리 한마디(규칙). 허용형으로 시작하고, 기억 하나 + 대안 하나만 말한다.
 export function ruleLine(card) {
+  if (!card.canBuy) {
+    return `지금 가진 돈(이번 ${card.unit} 남은 돈과 저축통)보다 ${won(card.short)} 많아서 아직은 못 사. 정말 갖고 싶으면 목표로 정해서 같이 모아 보자!`;
+  }
   const parts = [isFood(card.cat) ? '먹어도 돼!' : '사도 돼!'];
   if (card.repeat >= 2) parts.push(`이번 ${card.unit} ${card.name}만 ${card.repeat + 1}번째 고민이야.`);
   if (card.over === 0) {

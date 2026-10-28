@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blankState, load, save, setupBudget, newDay, record, saveMoney, worry, pendingHolds, resolveHold, demoState, todayOf, memoryStorage } from '../app/js/store.js';
+import { blankState, load, save, setupBudget, newDay, record, saveMoney, worry, pendingHolds, resolveHold, demoState, todayOf, memoryStorage, walletOf, canSpend } from '../app/js/store.js';
 import { dayStatus, streak, goalProgress } from '../app/js/budget.js';
 
 const weekly = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
@@ -127,4 +127,39 @@ test('demo state looks the same whatever weekday the demo runs on', () => {
     assert.equal(streak(s, day), 5, day);
     assert.equal(dayStatus(s, day).limit, dayStatus(demoState('2026-12-11'), '2026-12-11').limit, day);
   }
+});
+
+test('keeping different things over and over cannot make more leaves than the money left', () => {
+  const s = setupBudget(blankState(), weekly, '2026-11-02');
+  for (let i = 0; i < 50; i++) worry(s, '2026-11-02', { name: `물건${i}`, amount: 9000, cat: 'etc' }, 'skip');
+  assert.equal(s.leaves, 5); // 이번 주 쓸 돈 5,000원 → 최대 5장
+  for (let i = 0; i < 10; i++) worry(s, '2026-11-03', { name: `또${i}`, amount: 9000, cat: 'etc' }, 'skip');
+  assert.equal(s.leaves, 5); // 다음 날에도 같은 돈을 다시 세지 않는다
+});
+
+test('small kept amounts add up to a leaf instead of each paying one', () => {
+  const s = setupBudget(blankState(), weekly, '2026-11-02');
+  const got = [300, 300, 300, 300].map((amount, i) => worry(s, '2026-11-02', { name: `사탕${i}`, amount, cat: 'snack' }, 'skip').leaves);
+  assert.deepEqual(got, [0, 0, 0, 1]);
+});
+
+test('money never goes below zero: spending is limited to this cycle plus the jar', () => {
+  const s = setupBudget(blankState(), weekly, '2026-11-02');
+  assert.equal(walletOf(s, '2026-11-02'), 5000 + 15000);
+  assert.equal(worry(s, '2026-11-02', { name: '게임기', amount: 300000, cat: 'etc' }, 'buy'), null);
+  assert.equal(s.entries.length, 0);
+  assert.equal(canSpend(s, '2026-11-02', 20000), true);
+  assert.equal(canSpend(s, '2026-11-02', 20001), false);
+  worry(s, '2026-11-02', { name: '운동화', amount: 20000, cat: 'shopping' }, 'buy');
+  newDay(s, '2026-11-09');
+  assert.equal(s.autoSaved, 15000); // 지난 저축 15,000원을 모두 꺼내 쓰고 새 주기 저축만 남음
+  assert.ok(goalProgress(s).saved >= 0);
+});
+
+test('a hold cannot be bought later if the money is gone', () => {
+  const s = setupBudget(blankState(), weekly, '2026-11-02');
+  const h = worry(s, '2026-11-02', { name: '운동화', amount: 18000, cat: 'shopping' }, 'hold');
+  record(s, '2026-11-03', 5000, 'friends');
+  assert.equal(resolveHold(s, '2026-11-03', h.id, 'buy'), null);
+  assert.equal(h.outcome, null);
 });

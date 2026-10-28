@@ -94,3 +94,18 @@ test('Korean particles follow the last syllable', () => {
   assert.equal(ro('편의점 음료'), '편의점 음료로');
   assert.equal(ro('젤'), '젤로');
 });
+
+test('the card says when something costs more than all the money there is', () => {
+  const c = judge(doyeon(), friday, { name: '게임기', amount: 300000, cat: 'etc' });
+  assert.equal(c.canBuy, false);
+  assert.equal(c.short, 300000 - (3200 + 48300));
+  assert.match(ruleLine(c), /아직은 못 사/);
+});
+
+test('money already counted as kept this cycle is not kept again', () => {
+  const worries = [{ id: 'k', date: '2026-11-05', name: '마라탕', amount: 9000, outcome: 'skip', resolvedOn: '2026-11-05', kept: 3200, leaves: 3 }];
+  const c = judge(doyeon({ worries }), friday, { name: '떡볶이', amount: 4000, cat: 'friends' });
+  assert.equal(c.keep, 0);
+  assert.equal(c.leaves, 0);
+  assert.equal(c.leafReason, 'empty');
+});

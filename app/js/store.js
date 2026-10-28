@@ -1,6 +1,6 @@
 // 앱 상태: 기기 저장, 날짜 넘김 처리, 고민(살래·참을래·보류)과 기록, 시연 데이터.
-import { ymd, addDays, diffDays, weekday, cycleRange, dayStatus } from './budget.js';
-import { leavesFor } from './decide.js';
+import { ymd, addDays, diffDays, weekday, cycleRange, dayStatus, goalProgress } from './budget.js';
+import { keepClaim } from './decide.js';
 
 const KEY = 'dongguri-v1';
 const HOLD_DAYS = 3;
@@ -70,7 +70,7 @@ function applyCycle(state, today, events) {
   if (state.savedCycles.length && prevEnd >= state.startDate) {
     const left = dayStatus(state, prevEnd).cycleLeft;
     if (left !== 0) {
-      state.autoSaved += left;
+      state.autoSaved = Math.max(0, state.autoSaved + left);
       events.push({ type: left > 0 ? 'leftover' : 'overdraw', amount: Math.abs(left) });
     }
   }
@@ -104,6 +104,10 @@ export function newDay(state, today) {
   return events;
 }
 
+// 지금 가진 돈: 이번 주기에 남은 돈 + 저축통. 이보다 많이 쓰는 기록은 받지 않는다(돈이 마이너스가 되지 않게).
+export const walletOf = (state, today) => dayStatus(state, today).cycleLeft + goalProgress(state).saved;
+export const canSpend = (state, today, amount) => amount > 0 && amount <= walletOf(state, today);
+
 export function record(state, today, amount, category, memo = '') {
   const e = { id: newId(), date: today, type: 'spend', amount, category, memo };
   state.entries.push(e);
@@ -122,21 +126,24 @@ export function removeEntry(state, id) {
 
 function settle(state, today, w, outcome) {
   if (outcome === 'skip') {
-    w.kept = Math.min(w.amount, Math.max(0, dayStatus(state, today).cycleLeft));
-    w.leaves = leavesFor(state, today, w.name, w.amount);
+    const c = keepClaim(state, today, w.name, w.amount);
+    w.kept = c.kept;
+    w.leaves = c.leaves;
     state.leaves += w.leaves;
     if (w.leaves) state.rewardLog.push({ date: today, action: 'keep', amount: w.leaves });
   } else {
+    if (!canSpend(state, today, w.amount)) return false;
     w.entryId = record(state, today, w.amount, w.cat, w.name).id;
   }
   w.outcome = outcome;
   w.resolvedOn = today;
+  return true;
 }
 
 // 판단 카드에서 고른 결과를 남긴다. choice: 'buy' 살래 · 'skip' 참을래 · 'hold' 내일 다시 볼래
 export function worry(state, today, item, choice) {
   const w = { id: newId(), date: today, name: item.name, amount: item.amount, cat: item.cat || 'etc', choice, outcome: null, resolvedOn: null, leaves: 0 };
-  if (choice !== 'hold') settle(state, today, w, choice);
+  if (choice !== 'hold' && !settle(state, today, w, choice)) return null;
   state.worries.push(w);
   const p = state.chipPrefs[item.name];
   state.chipPrefs[item.name] = { amount: item.amount, count: (p?.count || 0) + 1 };
@@ -148,8 +155,7 @@ export const pendingHolds = (state, today) => state.worries.filter((w) => w.choi
 export function resolveHold(state, today, id, outcome) {
   const w = state.worries.find((x) => x.id === id);
   if (!w || w.outcome) return null;
-  settle(state, today, w, outcome);
-  return w;
+  return settle(state, today, w, outcome) ? w : null;
 }
 
 // 시연용 김도연의 2주. 날짜는 오늘 기준으로 만든다.
@@ -171,7 +177,7 @@ const DEMO_DAYS = [
   [1, []],
 ];
 // 참은 고민: [며칠 전, 이름, 금액, 카테고리]
-const DEMO_KEPT = [[12, '마라탕', 9000, 'friends'], [10, '게임 아이템', 5000, 'etc'], [7, '노래방', 4500, 'friends'], [3, '간식', 1500, 'snack']];
+const DEMO_KEPT = [[12, '마라탕', 9000, 'friends'], [10, '게임 아이템', 5000, 'etc'], [7, '노래방', 4500, 'friends'], [6, '간식', 1500, 'snack']];
 
 export function demoState(today) {
   const s = blankState();

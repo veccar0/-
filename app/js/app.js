@@ -1,7 +1,7 @@
 // 돈구리 앱: 상태를 받아 화면을 다시 그리는 단순한 렌더 루프.
 // 중심 흐름은 "살까 말까?" → 판단 카드 → 살래·참을래·내일 다시 볼래 → 은행나무.
 import { addDays, diffDays, weekday, cycleRange, dayStatus, streak, level, quizIndexes, spendable } from './budget.js';
-import { load, save, blankState, todayOf, newDay, setupBudget, record, removeEntry, worry, pendingHolds, resolveHold, demoState } from './store.js';
+import { load, save, blankState, todayOf, newDay, setupBudget, record, removeEntry, worry, pendingHolds, resolveHold, demoState, walletOf, canSpend } from './store.js';
 import { chipList, judge, ruleLine, treeOf, weekStats, isFood, TREE_STAGES, ro } from './decide.js';
 import { QUIZ } from './quiz-data.js';
 import { SHOP, byId } from './shop-data.js';
@@ -71,8 +71,8 @@ function holdCard() {
   const ago = diffDays(w.date, today);
   return `<section class="card hold" aria-label="어제 고민한 것">
     <div class="hold-q">${mascot('think', 52, '')}<p><span class="small muted">${ago === 1 ? '어제' : `${ago}일 전`} 고민한 ${esc(w.name)} · ${won(w.amount)}</span><b>아직 ${want(w.cat)} 싶어?</b></p></div>
-    <div class="btn-row"><button class="btn leaf" data-act="hold" data-id="${w.id}" data-o="skip">이제 괜찮아</button><button class="btn ghost" data-act="hold" data-id="${w.id}" data-o="buy">그래도 살래</button></div>
-    <p class="small muted" style="margin:0;text-align:center">3일 동안 답이 없으면 안 산 걸로 할게요</p>
+    <div class="btn-row"><button class="btn leaf" data-act="hold" data-id="${w.id}" data-o="skip">이제 괜찮아</button><button class="btn ghost" data-act="hold" data-id="${w.id}" data-o="buy" ${canSpend(state, today, w.amount) ? '' : 'disabled'}>그래도 살래</button></div>
+    <p class="small muted" style="margin:0;text-align:center">${canSpend(state, today, w.amount) ? '3일 동안 답이 없으면 안 산 걸로 할게요' : `지금 가진 돈보다 ${won(w.amount - walletOf(state, today))} 많아서 살 수 없어요`}</p>
   </section>`;
 }
 
@@ -122,10 +122,13 @@ function recordSheet() {
   const amount = Number(sh.amount || 0);
   const st = dayStatus(state, today);
   let hint = '얼마를 썼나요?', cls = '';
+  const ok = canSpend(state, today, amount);
   if (amount > 0) {
     const after = st.left - amount;
-    if (after >= 0) { hint = `쓰고 나면 오늘 ${won(after)} 남아요`; cls = 'ok'; }
-    else { hint = `오늘 한도보다 ${won(-after)} 많아요 · 남은 날에 나눠서 맞춰요`; cls = 'bad'; }
+    if (!ok) { hint = `가진 돈(이번 ${unitOf()} 남은 돈 + 저축통)보다 ${won(amount - walletOf(state, today))} 많아요`; cls = 'bad'; }
+    else if (after >= 0) { hint = `쓰고 나면 오늘 ${won(after)} 남아요`; cls = 'ok'; }
+    else if (amount <= Math.max(0, st.cycleLeft)) { hint = `오늘 한도보다 ${won(-after)} 많아요 · 남은 날에 나눠서 맞춰요`; cls = 'bad'; }
+    else { hint = `이번 ${unitOf()} 돈보다 ${won(amount - Math.max(0, st.cycleLeft))} 많아요 · 그만큼 저축통에서 빠져요`; cls = 'bad'; }
   }
   return `<div class="grabber"></div>
     <div class="row"><h3>쓴 돈 기록</h3><button class="icon-btn" data-act="close" aria-label="닫기">${ICON.close}</button></div>
@@ -133,7 +136,7 @@ function recordSheet() {
     <div class="chips" role="group" aria-label="카테고리">${CATEGORIES.map((c) =>
       `<button class="chip" data-act="cat" data-cat="${c.id}" aria-pressed="${sh.cat === c.id}">${c.name}</button>`).join('')}</div>
     ${keypad()}
-    <button class="btn primary block" data-act="save-record" ${amount > 0 ? '' : 'disabled'}>기록하기</button>`;
+    <button class="btn primary block" data-act="save-record" ${ok ? '' : 'disabled'}>기록하기</button>`;
 }
 
 // ───────────────────────── 살까 말까: 고민 입력 ─────────────────────────
@@ -165,31 +168,39 @@ function judgeSheet() {
   const buyGoal = c.later === null ? '목표 날짜는 저축액을 정하면 보여요'
     : c.later > 0 ? `<strong>${goal} ${c.later}일 늦어짐</strong>` : `${goal} 날짜 그대로`;
   const keepGoal = c.sooner === null ? `목표에 ${won(c.keep)} 더 가까워짐`
-    : c.sooner > 0 ? `<strong>이번 ${u} 끝까지 지키면 ${c.sooner}일 당겨짐</strong>` : `목표에 ${won(c.keep)} 더 가까워짐`;
-  const leaves = c.leaves ? `은행잎 ${c.leaves}장` : '오늘은 은행잎 없음(같은 물건 3번째)';
+    : c.sooner > 0 ? `<strong>이번 ${u} 끝까지 지키면 ${c.sooner}일 당겨짐</strong>` : c.keep > 0 ? `목표에 ${won(c.keep)} 더 가까워짐` : '목표 날짜 그대로';
+  const leaves = c.leaves ? `은행잎 ${c.leaves}장` : '은행잎 없음';
+  const leafNote = c.leafReason === 'same' ? '<small class="note-plain">같은 물건은 하루 2번까지만 은행잎을 줘요</small>'
+    : c.leafReason === 'empty' ? `<small class="note-plain">이번 ${u} 남은 돈은 이미 다 지킨 돈으로 셌어요</small>`
+    : c.leafReason === 'small' ? `<small class="note-plain">${won(c.toNext)} 더 지키면 은행잎 1장</small>` : '';
   const line = sh.ai?.text || ruleLine(c);
   const src = sh.ai?.source === 'claude' ? 'Claude가 다듬은 말 · 숫자는 앱이 계산' : (sh.ai ? '' : state.coachKey ? '돈구리가 생각 중…' : '');
   return `<div class="grabber"></div>
     <div class="row"><div><span class="small muted">살까 말까?</span><h3>${esc(c.name)} <span class="num">${won(c.amount)}</span></h3></div><button class="icon-btn" data-act="close" aria-label="닫기">${ICON.close}</button></div>
     <div class="say">${mascot('think', 60, '')}<p class="say-line">${esc(line)}${src ? `<small>${src}</small>` : ''}</p></div>
     <div class="opts">
-      <button class="opt" data-act="choose" data-c="buy">
+      ${c.canBuy ? `<button class="opt" data-act="choose" data-c="buy">
         <b>살래</b>
         <span>이번 ${u} 남은 돈 <em class="num">${arrow(c.left, c.weekAfterBuy)}</em>${c.over ? `<small>${won(c.over)}은 저축에서 빠져요</small>` : ''}</span>
         <span>${tLabel} <em class="num">${arrow(c.tomorrowNow, c.tomorrowBuy)}</em></span>
         <span>${buyGoal}</span>
-      </button>
+      </button>` : `<button class="opt" disabled>
+        <b>살래</b>
+        <span>가진 돈 <em class="num">${won(c.amount - c.short)}</em></span>
+        <span><strong>${won(c.short)} 모자라서 지금은 살 수 없어요</strong></span>
+        <span>목표로 정하면 같이 모을 수 있어요</span>
+      </button>`}
       <button class="opt" data-act="choose" data-c="skip">
         <b>참을래 <i class="badge leafy">${leaf(14)} ${leaves}</i></b>
-        <span>이번 ${u} 남은 돈 <em class="num">${won(c.left)} 그대로 지킴</em></span>
+        <span>${c.keep === c.left || c.keep === c.amount ? `이번 ${u} 남은 돈 <em class="num">${won(c.left)} 그대로 지킴</em>` : `새로 지키는 돈 <em class="num">${won(c.keep)}</em>`}</span>
         <span>${tLabel} <em class="num">${won(c.tomorrowNow)} 그대로</em></span>
-        <span>${keepGoal}</span>
+        <span>${keepGoal}</span>${leafNote}
       </button>
       <button class="opt" data-act="choose" data-c="hold">
         <b>내일 다시 볼래</b>
         <span>돈도 목표도 지금 그대로</span>
         <span>내일 "아직 ${want(c.cat)} 싶어?" 하고 물어볼게</span>
-        <span>내일 안 사면 ${c.leaves ? `은행잎 ${c.leaves}장` : '지킨 돈으로 기록'}</span>
+        <span>내일 안 사면 그때 남은 돈만큼 지킨 돈으로 쳐요</span>
       </button>
     </div>
     <button class="btn text block" data-act="worry-edit">금액 고치기</button>`;
@@ -526,7 +537,7 @@ function afterChoice(w, rect, stageBefore) {
   }
   if (!w.outcome) { toast(phone, `좋아, 내일 "${esc(w.name)}" 다시 물어볼게`); return; }
   flyToTree(rect);
-  toast(phone, `${leaf()} ${fromHold ? '하루 기다리니까 안 사도 됐지? ' : ''}지킨 ${won(Math.min(w.amount, Math.max(0, st.cycleLeft)))} · 은행잎 +${w.leaves}`);
+  toast(phone, `${leaf()} ${fromHold ? '하루 기다리니까 안 사도 됐지? ' : ''}${w.kept ? `지킨 ${won(w.kept)}` : '참았어요'}${w.leaves ? ` · 은행잎 +${w.leaves}` : ''}`);
   if (w.leaves) setTimeout(bumpLeaves, 700);
   const t = treeOf(state, today);
   if (t.stage > stageBefore) setTimeout(() => {
@@ -561,6 +572,7 @@ const ACT = {
   cat: (el) => { view.sheet.cat = el.dataset.cat; render(); },
   'save-record': () => {
     const { amount, cat } = view.sheet;
+    if (!canSpend(state, today, Number(amount))) return;
     record(state, today, Number(amount), cat);
     persist(); view.sheet = null; render();
     const st = dayStatus(state, today);
@@ -581,7 +593,7 @@ const ACT = {
     const rect = el.getBoundingClientRect();
     const stageBefore = treeOf(state, today).stage;
     const w = worry(state, today, view.sheet.item, el.dataset.c);
-    afterChoice(w, rect, stageBefore);
+    if (w) afterChoice(w, rect, stageBefore);
   },
   hold: (el) => {
     const rect = el.getBoundingClientRect();
@@ -637,7 +649,7 @@ const ACT = {
     const next = readSettingsForm();
     if (spendable(next) < 0) return updateSettingsPreview();
     const old = state.settings;
-    if (next.savePerCycle !== old.savePerCycle) state.autoSaved += next.savePerCycle - old.savePerCycle;
+    if (next.savePerCycle !== old.savePerCycle) state.autoSaved = Math.max(0, state.autoSaved + next.savePerCycle - old.savePerCycle);
     state.settings = next;
     persist(); close(); toast(phone, '예산을 저장했어요');
   },

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blankState, load, save, setupBudget, newDay, record, saveMoney, worry, pendingHolds, resolveHold, demoState, todayOf, memoryStorage, walletOf, canSpend } from '../app/js/store.js';
+import { blankState, load, save, setupBudget, newDay, record, saveMoney, worry, pendingHolds, resolveHold, demoState, todayOf, memoryStorage, walletOf, canSpend, receive, canRemove } from '../app/js/store.js';
 import { dayStatus, streak, goalProgress } from '../app/js/budget.js';
 
 const weekly = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
@@ -162,4 +162,13 @@ test('a hold cannot be bought later if the money is gone', () => {
   record(s, '2026-11-03', 5000, 'friends');
   assert.equal(resolveHold(s, '2026-11-03', h.id, 'buy'), null);
   assert.equal(h.outcome, null);
+});
+
+test('received money can be spent, and cannot be deleted once it is spent', () => {
+  const s = setupBudget(blankState(), weekly, '2026-11-02');
+  const e = receive(s, '2026-11-02', 30000, '세뱃돈');
+  assert.equal(walletOf(s, '2026-11-02'), 5000 + 30000 + 15000);
+  assert.ok(canRemove(s, '2026-11-02', e.id));
+  record(s, '2026-11-02', 40000, 'shopping');
+  assert.equal(canRemove(s, '2026-11-02', e.id), false);
 });

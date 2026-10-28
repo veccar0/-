@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHIPS, chipList, judge, ruleLine, treeOf, goalDays, weekStats, iGa, ro } from '../app/js/decide.js';
+import { CHIPS, chipList, judge, ruleLine, treeOf, goalDays, weekStats, iGa, ro, tightPlan } from '../app/js/decide.js';
 
 const settings = { cycle: 'weekly', payday: 1, allowance: 30000, fixed: 10000, savePerCycle: 15000, goalName: '무선 이어폰', goalAmount: 200000 };
 const spend = (date, amount) => ({ id: date + amount, date, type: 'spend', amount, category: 'snack' });
@@ -108,4 +108,19 @@ test('money already counted as kept this cycle is not kept again', () => {
   assert.equal(c.keep, 0);
   assert.equal(c.leaves, 0);
   assert.equal(c.leafReason, 'empty');
+});
+
+test('a tight plan suggests a smaller saving and shows how much later the goal gets', () => {
+  const p = tightPlan(settings, 0);
+  assert.equal(p.tight, true);
+  assert.equal(p.daily, 714);
+  assert.equal(p.fix.savePerCycle, 9500);
+  assert.equal(p.fix.daily, 1500);
+  assert.equal(p.fix.later, goalDays(200000, { ...settings, savePerCycle: 9500 }, 7) - goalDays(200000, settings, 7));
+  assert.equal(tightPlan({ ...settings, savePerCycle: 5000 }).tight, false);
+  assert.equal(p.fix.enough, true);
+  const poor = tightPlan({ ...settings, allowance: 15000, savePerCycle: 1000 }); // 저축을 0원으로 해도 빠듯함
+  assert.equal(poor.fix.savePerCycle, 0);
+  assert.equal(poor.fix.enough, false);
+  assert.equal(tightPlan({ ...settings, allowance: 15000, savePerCycle: 0 }).fix, null);
 });

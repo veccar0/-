@@ -1,8 +1,8 @@
 // 돈구리 앱: 상태를 받아 화면을 다시 그리는 단순한 렌더 루프.
 // 중심 흐름은 "살까 말까?" → 판단 카드 → 살래·참을래·내일 다시 볼래 → 은행나무.
-import { addDays, diffDays, weekday, cycleRange, dayStatus, streak, level, quizIndexes, spendable } from './budget.js';
-import { load, save, blankState, todayOf, newDay, setupBudget, record, removeEntry, worry, pendingHolds, resolveHold, demoState, walletOf, canSpend } from './store.js';
-import { chipList, judge, ruleLine, treeOf, weekStats, isFood, TREE_STAGES, ro } from './decide.js';
+import { addDays, diffDays, weekday, cycleRange, dayStatus, goalProgress, streak, level, quizIndexes, spendable } from './budget.js';
+import { load, save, blankState, todayOf, newDay, setupBudget, record, removeEntry, worry, pendingHolds, resolveHold, demoState, walletOf, canSpend, receive, canRemove } from './store.js';
+import { chipList, judge, ruleLine, treeOf, weekStats, isFood, TREE_STAGES, ro, tightPlan } from './decide.js';
 import { QUIZ } from './quiz-data.js';
 import { SHOP, byId } from './shop-data.js';
 import { askLine } from './coach.js';
@@ -101,13 +101,21 @@ function homeView() {
     <span class="ask-go" aria-hidden="true">›</span>
   </button>
   ${treeCard()}
-  <section class="card mini-today">
-    <div>
-      <span class="label">오늘 써도 되는 돈</span>
-      <b class="num ${st.left < 0 ? 'over' : ''}">${st.left < 0 ? `${won(-st.left)} 넘었어요` : won(st.left)}</b>
-      <small class="muted">이번 ${unitOf()} 남은 돈 ${won(Math.max(0, st.cycleLeft))} · ${st.daysLeft}일 남음</small>
+  ${moneyCard(st)}`;
+}
+
+// 홈의 돈 카드: 오늘 써도 되는 돈 + 남은 잔액(이번 주기) + 저축통, 그리고 "썼어"·"받았어"
+function moneyCard(st) {
+  const jar = goalProgress(state).saved;
+  const tp = tightPlan(state.settings, jar);
+  return `<section class="card money" aria-label="내 돈">
+    <div class="money-top">
+      <div><span class="label">오늘 써도 되는 돈</span><b class="num ${st.left < 0 ? 'over' : ''}">${st.left < 0 ? `${won(-st.left)} 넘음` : won(st.left)}</b></div>
+      <div class="bal"><span class="label">남은 잔액</span><b class="num">${won(Math.max(0, st.cycleLeft))}</b><small class="muted">이번 ${unitOf()} · ${st.daysLeft}일 남음</small>${st.cycleLeft < 0 ? `<small style="color:var(--over);font-weight:600">넘친 ${won(-st.cycleLeft)}은 주기가 끝날 때 저축통에서 빠져요</small>` : ''}</div>
     </div>
-    <button class="btn line" data-act="open-record">썼어</button>
+    <div class="money-sub"><span>${ICON.jar} 저축통 <b class="num">${won(jar)}</b></span><span>가진 돈 합계 <b class="num">${won(Math.max(0, walletOf(state, today)))}</b></span></div>
+    ${tp.tight ? `<button class="tight-note" data-act="open-settings">하루 ${won(tp.daily)}이면 빠듯해요 · 조정 방법 보기 ›</button>` : ''}
+    <div class="btn-row"><button class="btn line" data-act="open-record">썼어</button><button class="btn line" data-act="open-income">받았어</button></div>
   </section>`;
 }
 
@@ -137,6 +145,28 @@ function recordSheet() {
       `<button class="chip" data-act="cat" data-cat="${c.id}" aria-pressed="${sh.cat === c.id}">${c.name}</button>`).join('')}</div>
     ${keypad()}
     <button class="btn primary block" data-act="save-record" ${ok ? '' : 'disabled'}>기록하기</button>`;
+}
+
+// 용돈 말고 추가로 받은 돈("받았어")
+const INCOME_MEMOS = ['세뱃돈', '심부름', '생일 선물', '기타'];
+function incomeSheet() {
+  const sh = view.sheet;
+  const amount = Number(sh.amount || 0);
+  const st = dayStatus(state, today);
+  let hint = '얼마를 받았나요?';
+  if (amount > 0) {
+    const after = dayStatus({ ...state, entries: [...state.entries, { date: today, type: 'income', amount }] }, today);
+    const bal = (n) => (n < 0 ? `${won(-n)} 넘침` : won(n));
+    hint = `남은 잔액 ${bal(st.cycleLeft)} → ${bal(after.cycleLeft)} · 오늘 ${won(st.limit)} → ${won(after.limit)}`;
+  }
+  return `<div class="grabber"></div>
+    <div class="row"><h3>받은 돈 기록</h3><button class="icon-btn" data-act="close" aria-label="닫기">${ICON.close}</button></div>
+    <div class="amount-display"><div class="val num ${amount ? '' : 'empty'}">${amount ? won(amount) : '0원'}</div><div class="hint ${amount ? 'ok' : ''}">${hint}</div></div>
+    <div class="chips" role="group" aria-label="받은 이유">${INCOME_MEMOS.map((m) =>
+      `<button class="chip" data-act="memo" data-v="${m}" aria-pressed="${sh.memo === m}">${m}</button>`).join('')}</div>
+    ${keypad()}
+    <p class="small muted" style="margin:0;text-align:center">이번 ${unitOf()} 쓸 돈에 더해져요. 남으면 주기가 끝날 때 저축통으로 가요.</p>
+    <button class="btn primary block" data-act="save-income" ${amount > 0 ? '' : 'disabled'}>기록하기</button>`;
 }
 
 // ───────────────────────── 살까 말까: 고민 입력 ─────────────────────────
@@ -255,14 +285,15 @@ function logView() {
     </section>
     <section class="card"><div class="row"><h2>이번 용돈 주기</h2><span class="small muted">남은 돈 ${won(Math.max(0, dayStatus(state, today).cycleLeft))}</span></div>${weekStrip()}</section>
     <section class="card">
-      <div class="row"><h2>쓴 돈</h2><button class="btn text" data-act="open-record" style="padding:0">+ 기록</button></div>
+      <div class="row"><h2>쓴 돈 · 받은 돈</h2><span><button class="btn text" data-act="open-record" style="padding:0 6px">썼어</button><button class="btn text" data-act="open-income" style="padding:0 6px">받았어</button></span></div>
       ${entries.length ? `<div class="list">${entries.map((e) => {
-        const c = e.type === 'save' ? { name: '저축', icon: leaf(22) } : catOf(e.category);
-        return `<div class="item"><span class="cat" ${e.type === 'save' ? 'style="background:var(--leaf-tint)"' : ''}>${c.icon}</span>
-          <div><b>${esc(e.memo || c.name)}</b><small>${shortDate(e.date)} · ${e.type === 'save' ? '저축통으로 옮김' : c.name}</small></div>
-          <div style="text-align:right"><div class="amt num ${e.type === 'save' ? 'save' : ''}">${e.type === 'save' ? '+' : '−'}${won(e.amount)}</div>
+        const c = e.type === 'save' ? { name: '저축', icon: leaf(22) } : e.type === 'income' ? { name: '받은 돈', icon: ICON.coin } : catOf(e.category);
+        const sub = e.type === 'save' ? '저축통으로 옮김' : e.type === 'income' ? '받은 돈' : c.name;
+        return `<div class="item"><span class="cat" ${e.type === 'save' ? 'style="background:var(--leaf-tint)"' : e.type === 'income' ? 'style="background:var(--blue-tint);color:var(--blue)"' : ''}>${c.icon}</span>
+          <div><b>${esc(e.memo || c.name)}</b><small>${shortDate(e.date)} · ${sub}</small></div>
+          <div style="text-align:right"><div class="amt num ${e.type}">${e.type === 'spend' ? '−' : '+'}${won(e.amount)}</div>
           <button class="del" data-act="ask-delete" data-id="${e.id}">지우기</button></div></div>`;
-      }).join('')}</div>` : '<p class="empty">이번 주기에 쓴 돈이 없어요.</p>'}
+      }).join('')}</div>` : '<p class="empty">이번 주기에 쓰거나 받은 돈이 없어요.</p>'}
     </section>`;
 }
 
@@ -376,6 +407,18 @@ function settingsSheet() {
     </section>`;
 }
 
+// 하루 쓸 돈이 가장 싼 칩보다 적을 때: 저축을 줄이는 안과 그 대가를 같이 보여 준다.
+function tightBlock(tp, unit, goalName, act) {
+  if (!tp.tight) return '';
+  const head = `<span class="err">하루 ${won(tp.daily)}이면 ${won(tp.min)}짜리 간식도 하루 돈으로는 못 사요.</span>`;
+  if (!tp.fix) return `${head}<span class="muted small">고정 지출을 줄이거나, 용돈 말고 받은 돈을 홈의 "받았어"로 더해 보세요.</span>`;
+  const f = tp.fix;
+  const cost = f.later === null ? '목표 날짜는 계산할 수 없어요' : f.later > 0 ? `${esc(goalName || '목표')}는 ${f.later}일 늦어져요` : '목표 날짜는 그대로예요';
+  return `${head}<span>저축을 ${unit}마다 <b>${won(f.savePerCycle)}</b>로 줄이면 하루 <b>${won(f.daily)}</b> · ${cost}</span>
+    ${f.enough ? '' : '<span class="muted small">저축을 0원으로 해도 빠듯해요. 받은 돈은 홈의 "받았어"로 더할 수 있어요.</span>'}
+    <button class="btn leaf" data-act="${act}" data-v="${f.savePerCycle}" style="height:40px;font-size:14px;justify-self:start">이렇게 바꾸기</button>`;
+}
+
 function readSettingsForm() {
   const n = (id) => Math.max(0, Math.floor(Number(String(document.getElementById(id).value).replace(/[^\d]/g, '')) || 0));
   return { ...state.settings, allowance: n('setAllowance'), fixed: n('setFixed'), savePerCycle: n('setSave'), goalName: document.getElementById('setGoal').value.trim() || '목표', goalAmount: n('setGoalAmt') };
@@ -389,7 +432,8 @@ function updateSettingsPreview() {
   if (money < 0) { box.innerHTML = `<span class="err">용돈보다 고정 지출과 저축이 ${won(-money)} 많아요.</span>`; return; }
   const before = dayStatus(state, today).limit;
   const after = dayStatus({ ...state, settings: next }, today).limit;
-  box.innerHTML = before === after ? '<span class="muted">하루 한도는 그대로예요.</span>' : `<span>저장하면 오늘 하루 한도 <span class="arrow num">${won(before)} → ${won(after)}</span></span>`;
+  box.innerHTML = (before === after ? '<span class="muted">하루 한도는 그대로예요.</span>' : `<span>저장하면 오늘 하루 한도 <span class="arrow num">${won(before)} → ${won(after)}</span></span>`)
+    + tightBlock(tightPlan(next, goalProgress(state).saved), next.cycle === 'monthly' ? '달' : '주', next.goalName, 'set-apply-save');
 }
 
 // ───────────────────────── 온보딩 ─────────────────────────
@@ -458,7 +502,7 @@ function updateOnbPreview() {
   const d = view.onb.draft;
   const amt = numIn('onbGoalAmt');
   const saveEl = document.getElementById('onbSave');
-  if (document.activeElement !== saveEl && amt > 0 && d.months) {
+  if (document.activeElement !== saveEl && !d.saveTouched && amt > 0 && d.months) {
     const suggest = Math.ceil(amt / cyclesFor(d.months, d.cycle) / 100) * 100;
     saveEl.value = suggest;
   }
@@ -467,7 +511,8 @@ function updateOnbPreview() {
   const unit = d.cycle === 'monthly' ? '달' : '주';
   const days = d.cycle === 'monthly' ? 30 : 7;
   if (money < 0) box.innerHTML = `<span class="err">저축이 쓸 수 있는 돈보다 ${won(-money)} 많아요. 기간을 늘려 볼까요?</span>`;
-  else box.innerHTML = `<span>${unit}마다 <b>${won(savePer)}</b> 저축하면 하루 약 <span class="arrow num">${won(Math.floor(money / days))}</span>씩 쓸 수 있어요.</span>${money / days < 500 ? '<span class="muted small">조금 빠듯하다면 기간을 늘려도 괜찮아요.</span>' : ''}`;
+  else box.innerHTML = `<span>${unit}마다 <b>${won(savePer)}</b> 저축하면 하루 약 <span class="arrow num">${won(Math.floor(money / days))}</span>씩 쓸 수 있어요.</span>`
+    + tightBlock(tightPlan({ ...d, savePerCycle: savePer, goalAmount: amt, goalName: document.getElementById('onbGoal')?.value }, 0), unit, document.getElementById('onbGoal')?.value, 'onb-apply-save');
 }
 
 // ───────────────────────── 렌더 ─────────────────────────
@@ -475,7 +520,7 @@ function sheetHtml() {
   const s = view.sheet;
   if (!s) return '';
   const inner = {
-    record: recordSheet, worry: worrySheet, judge: judgeSheet, buy: buySheet, settings: settingsSheet,
+    record: recordSheet, income: incomeSheet, worry: worrySheet, judge: judgeSheet, buy: buySheet, settings: settingsSheet,
     retry: () => `<div class="grabber"></div><div class="row"><h3>오답 다시 풀기</h3><button class="icon-btn" data-act="close" aria-label="닫기">${ICON.close}</button></div>${questionBlock(s.id, s.answered, 'repick')}`,
     confirm: () => `<div class="grabber"></div><h3>${s.title}</h3><p class="muted" style="margin:0">${s.body}</p><div class="btn-row"><button class="btn ghost" data-act="close">취소</button><button class="btn ${s.danger ? 'danger' : 'primary'}" data-act="confirm-ok">${s.ok}</button></div>`,
   }[s.type]();
@@ -562,6 +607,16 @@ const ACT = {
   'open-settings': () => open({ type: 'settings' }),
   'open-record': () => open({ type: 'record', amount: '', cat: 'friends' }),
   'open-worry': () => open({ type: 'worry' }),
+  'open-income': () => open({ type: 'income', amount: '', memo: '세뱃돈' }),
+  memo: (el) => { view.sheet.memo = el.dataset.v; render(); },
+  'save-income': () => {
+    const { amount, memo } = view.sheet;
+    const before = dayStatus(state, today).limit;
+    receive(state, today, Number(amount), memo === '기타' ? '' : memo);
+    persist(); view.sheet = null; render();
+    const st = dayStatus(state, today);
+    toast(phone, `${won(Number(amount))} 받았어요 · 남은 잔액 ${won(Math.max(0, st.cycleLeft))}${st.limit !== before ? ` · 오늘 ${won(st.limit)}` : ''}`);
+  },
   close, scrim: (el, e) => { if (e.target === el) close(); },
   key: (el) => {
     const s = view.sheet; const k = el.dataset.k;
@@ -604,7 +659,8 @@ const ACT = {
 
   'ask-delete': (el) => {
     const e = state.entries.find((x) => x.id === el.dataset.id);
-    confirm('이 기록을 지울까요?', `${won(e.amount)} ${e.type === 'save' ? '저축' : '지출'} 기록을 지우면 한도가 다시 계산돼요.`, '지우기', () => { removeEntry(state, e.id); persist(); toast(phone, '기록을 지웠어요'); }, true);
+    if (!canRemove(state, today, e.id)) return toast(phone, '받은 돈을 이미 써서 지우면 잔액이 마이너스가 돼요');
+    confirm('이 기록을 지울까요?', `${won(e.amount)} ${{ save: '저축', income: '받은 돈', spend: '지출' }[e.type]} 기록을 지우면 한도가 다시 계산돼요.`, '지우기', () => { removeEntry(state, e.id); persist(); toast(phone, '기록을 지웠어요'); }, true);
   },
   'confirm-ok': () => { const run = view.sheet.run; view.sheet = null; run(); render(); },
 
@@ -703,7 +759,18 @@ const ACT = {
     const d = view.onb.draft;
     d.goalName = document.getElementById('onbGoal').value; d.goalAmount = numIn('onbGoalAmt'); d.months = Number(el.dataset.v);
     d.savePerCycle = d.goalAmount ? Math.ceil(d.goalAmount / cyclesFor(d.months, d.cycle) / 100) * 100 : null;
+    d.saveTouched = false;
     render();
+  },
+  'onb-apply-save': (el) => {
+    const d = view.onb.draft;
+    d.savePerCycle = Number(el.dataset.v); d.saveTouched = true;
+    document.getElementById('onbSave').value = el.dataset.v;
+    updateOnbPreview();
+  },
+  'set-apply-save': (el) => {
+    document.getElementById('setSave').value = el.dataset.v;
+    updateSettingsPreview();
   },
   'onb-finish': () => {
     const d = view.onb.draft;
@@ -721,6 +788,7 @@ document.addEventListener('click', (e) => {
   if (fn) fn(el, e);
 });
 document.addEventListener('input', (e) => {
+  if (e.target.id === 'onbSave' && view.onb) view.onb.draft.saveTouched = true;
   if (['onbGoalAmt', 'onbSave'].includes(e.target.id)) updateOnbPreview();
   if (e.target.id?.startsWith('set') && e.target.id !== 'setKey') updateSettingsPreview();
   if (e.target.id === 'worryName' && view.sheet) view.sheet.name = e.target.value;

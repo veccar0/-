@@ -30,6 +30,26 @@ export function chipList(prefs = {}) {
     .sort((a, b) => b.count - a.count || a.i - b.i);
 }
 
+// 하루에 쓸 돈이 가장 싼 고민 칩보다 적으면 빠듯한 계획이다.
+export const MIN_DAILY = Math.min(...CHIPS.map((c) => c.amount));
+
+// 빠듯한 계획이면 하루 MIN_DAILY원이 되도록 주기 저축을 줄인 안과, 그 대가(목표가 늦어지는 날)를 함께 돌려준다.
+export function tightPlan(settings, saved = 0) {
+  const days = settings.cycle === 'monthly' ? 30 : 7;
+  const free = settings.allowance - settings.fixed;
+  const daily = Math.floor((free - settings.savePerCycle) / days);
+  if (daily >= MIN_DAILY) return { daily, tight: false, min: MIN_DAILY };
+  const save = Math.max(0, Math.floor((free - MIN_DAILY * days) / 100) * 100);
+  if (save >= settings.savePerCycle) return { daily, tight: true, min: MIN_DAILY, fix: null };
+  const rem = Math.max(0, settings.goalAmount - saved);
+  const before = goalDays(rem, settings, days);
+  const after = goalDays(rem, { ...settings, savePerCycle: save }, days);
+  return {
+    daily, tight: true, min: MIN_DAILY,
+    fix: { savePerCycle: save, daily: Math.floor((free - save) / days), enough: free - save >= MIN_DAILY * days, later: before === null || after === null ? null : after - before },
+  };
+}
+
 // 지금 속도(주기마다 자동 저축)로 남은 금액을 모으는 데 걸리는 날 수. 저축이 0이면 알 수 없음(null).
 export function goalDays(remaining, settings, cycleLen) {
   if (remaining <= 0) return 0;

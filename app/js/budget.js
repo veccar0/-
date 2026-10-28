@@ -42,8 +42,10 @@ export function dayStatus(state, today) {
   const money = spendable(s);
   const inCycleBefore = (e) => e.date >= cycle.start && e.date < today;
   const usedBefore = sumOn(state.entries, (e) => inCycleBefore(e) && (e.type === 'spend' || e.type === 'save'));
+  // 용돈 말고 추가로 받은 돈(세뱃돈, 심부름 값)은 받은 날부터 이번 주기 쓸 돈에 더해진다.
+  const income = sumOn(state.entries, (e) => e.type === 'income' && e.date >= cycle.start && e.date <= today);
   const daysLeft = diffDays(today, cycle.end) + 1;
-  const limit = Math.max(0, Math.floor((money - usedBefore) / daysLeft));
+  const limit = Math.max(0, Math.floor((money + income - usedBefore) / daysLeft));
   const spentToday = sumOn(state.entries, (e) => e.date === today && e.type === 'spend');
   const savedToday = sumOn(state.entries, (e) => e.date === today && e.type === 'save');
   const baseLimit = Math.floor(money / cycle.days);
@@ -51,8 +53,8 @@ export function dayStatus(state, today) {
     limit, spentToday, savedToday,
     left: limit - spentToday - savedToday,
     baseLimit, bonus: limit - baseLimit,
-    cycle, spendable: money, daysLeft,
-    cycleLeft: money - usedBefore - spentToday - savedToday,
+    cycle, spendable: money, income, daysLeft,
+    cycleLeft: money + income - usedBefore - spentToday - savedToday,
   };
 }
 

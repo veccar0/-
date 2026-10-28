@@ -101,3 +101,13 @@ test('daily quiz rotation shows 5 questions and covers all 30 in 6 days', () => 
   }
   assert.equal(seen.size, 30);
 });
+
+test('extra money received is added to this cycle from that day on', () => {
+  const income = (date, amount) => ({ id: 'i' + date, date, type: 'income', amount });
+  const st = dayStatus(base([income('2026-11-04', 10000)]), '2026-11-04');
+  assert.equal(st.income, 10000);
+  assert.equal(st.cycleLeft, 15000);
+  assert.equal(st.limit, Math.floor(15000 / 5));
+  assert.equal(dayStatus(base([income('2026-11-04', 10000)]), '2026-11-03').cycleLeft, 5000);
+  assert.equal(dayStatus(base([income('2026-11-04', 10000)]), '2026-11-09').income, 0);
+});

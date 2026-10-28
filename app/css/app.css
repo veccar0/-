@@ -265,13 +265,21 @@ img { max-width: 100%; display: block; }
 .tree-info b { font-size: 15px; }
 .tree-info .small b { color: var(--ink); }
 
-.mini-today { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; }
-.mini-today > div { display: grid; }
-.mini-today .label { font-size: 13px; color: var(--sub); font-weight: 600; }
-.mini-today b { font-size: 24px; font-weight: 800; }
-.mini-today b.over { color: var(--over); font-size: 20px; }
-.mini-today small { font-size: 12px; }
-.mini-today .btn { height: 44px; padding: 0 18px; font-size: 15px; flex: none; }
+.money { display: grid; gap: 12px; padding: 18px; }
+.money-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.money-top > div { display: grid; align-content: start; }
+.money-top .bal { border-left: 1px solid var(--line); padding-left: 14px; }
+.money .label { font-size: 13px; color: var(--sub); font-weight: 600; }
+.money b { font-size: 24px; font-weight: 800; }
+.money b.over { color: var(--over); font-size: 20px; }
+.money small { font-size: 12px; }
+.money-sub { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--soft); border-radius: 12px; padding: 9px 12px; font-size: 13px; color: var(--sub); }
+.money-sub span { display: inline-flex; align-items: center; gap: 4px; }
+.money-sub svg { width: 16px; height: 16px; }
+.money-sub b { font-size: 13px; color: var(--ink); font-weight: 700; }
+.money .btn-row .btn { height: 46px; font-size: 15px; }
+.tight-note { text-align: left; font-size: 13px; font-weight: 600; color: var(--over); background: var(--over-tint); border-radius: 12px; padding: 9px 12px; }
+.item .amt.income { color: var(--blue); }
 
 .worry-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .wchip { background: var(--soft); border-radius: 16px; padding: 14px; text-align: left; display: grid; gap: 2px; transition: transform .08s; }

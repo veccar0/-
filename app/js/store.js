@@ -114,6 +114,21 @@ export function record(state, today, amount, category, memo = '') {
   return e;
 }
 
+// 용돈 말고 추가로 받은 돈
+export function receive(state, today, amount, memo = '') {
+  const e = { id: newId(), date: today, type: 'income', amount, memo };
+  state.entries.push(e);
+  return e;
+}
+
+// 지우면 돈이 마이너스가 되는 기록(이미 쓴 받은 돈)은 지울 수 없다.
+export function canRemove(state, today, id) {
+  const e = state.entries.find((x) => x.id === id);
+  if (!e) return false;
+  if (e.type !== 'income') return true;
+  return walletOf({ ...state, entries: state.entries.filter((x) => x.id !== id) }, today) >= 0;
+}
+
 export function saveMoney(state, today, amount) {
   const e = { id: newId(), date: today, type: 'save', amount };
   state.entries.push(e);

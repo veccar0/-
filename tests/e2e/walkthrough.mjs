@@ -31,6 +31,8 @@ await page.selectOption('#fxUntil', { index: 6 });
 await shot(page, '02a-fixed');
 await page.click('[data-act="onb-next"]');
 await page.click('[data-act="onb-spend-day"][data-v="2"]');
+await page.click('[data-act="onb-spend-custom"]');
+await page.fill('#onbSpendAmt', '2500');
 await shot(page, '02b-spend-days');
 await page.click('[data-act="onb-next"]');
 await page.fill('#onbGoal', '무선 이어폰');

@@ -539,15 +539,13 @@ function onbView() {
       <p class="err" id="onbErr"></p>`;
     foot = `<div class="btn-row"><button class="btn ghost" data-act="onb-skip">없어요</button><button class="btn primary" data-act="onb-next">다음</button></div>`;
   } else if (o.step === 3) {
-    const n = needPerCycle(d);
-    const free = d.allowance - fixedPerCycle(d);
-    const sum = !n.custom ? '<span class="muted">요일을 고르지 않으면 매일 똑같이 나눠요.</span>'
-      : n.need <= free ? `<span>쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${unit}에 약 <b>${won(n.need)}</b>. 나머지 <b>${won(free - n.need)}</b>까지 저축할 수 있어요.</span>`
-      : `<span class="err">쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${won(n.need)}인데, 고정 지출을 빼면 ${won(free)}이라 ${won(n.need - free)} 모자라요. 요일이나 금액을 줄여 볼까요?</span>`;
+    const custom = !SPEND_PRESETS.includes(d.spendAmount) || o.spendCustom;
     body = `<div><h1>주로 언제 돈을 써?</h1><p class="lead">고른 요일에 돈을 더 많이 나눠 줄게요. 안 쓰는 날에도 조금은 남겨 둬요.</p></div>
       <div class="field"><label>돈 쓰는 요일 (여러 개 고르기)</label><div class="days7">${DAY_NAMES.map((nm, i) => `<button data-act="onb-spend-day" data-v="${i}" aria-pressed="${(d.spendDays || []).includes(i)}">${nm}</button>`).join('')}</div></div>
-      <div class="field"><label>그날은 보통 얼마쯤 써?</label><div class="chips">${[1000, 2000, 3000, 5000].map((v) => `<button class="chip" data-act="onb-spend-amt" data-v="${v}" aria-pressed="${d.spendAmount === v}">${comma(v)}원</button>`).join('')}</div></div>
-      <div class="preview">${sum}</div>`;
+      <div class="field"><label>그날은 보통 얼마쯤 써?</label><div class="chips">${SPEND_PRESETS.map((v) => `<button class="chip" data-act="onb-spend-amt" data-v="${v}" aria-pressed="${!custom && d.spendAmount === v}">${comma(v)}원</button>`).join('')}
+        <button class="chip" data-act="onb-spend-custom" aria-pressed="${custom}">직접 입력</button></div>
+        ${custom ? `<div class="input-won"><input class="input num" id="onbSpendAmt" inputmode="numeric" placeholder="예: 2,500" value="${d.spendAmount || ''}"></div>` : ''}</div>
+      <div class="preview" id="onbSpendSum">${spendSummary(d)}</div>`;
     foot = `<div class="btn-row"><button class="btn ghost" data-act="onb-spend-skip">잘 모르겠어</button><button class="btn primary" data-act="onb-next">다음</button></div>`;
   } else if (o.step === 4) {
     body = `<div><h1>무엇을 위해 모을까?</h1><p class="lead">금액을 넣으면 지금 용돈으로 언제쯤 살 수 있는지 날짜로 추천해 줄게요.</p></div>
@@ -568,6 +566,17 @@ function onbView() {
   }
   return `<div class="onb"><div style="display:grid;gap:14px">${o.step > 0 ? `<div class="row">${back}<span class="small muted">${o.step} / 5</span><span style="width:36px"></span></div>` : ''}${steps}</div>
     <div class="onb-body">${body}</div><div>${foot}</div></div>`;
+}
+
+// 온보딩 3단계: 그날 쓰는 돈 버튼과, 쓰는 날 × 그날 쓰는 돈 요약
+const SPEND_PRESETS = [1000, 2000, 3000, 5000];
+function spendSummary(d) {
+  const unit = d.cycle === 'monthly' ? '달' : '주';
+  const n = needPerCycle(d);
+  const free = d.allowance - fixedPerCycle(d);
+  if (!n.custom) return '<span class="muted">요일을 고르지 않으면 매일 똑같이 나눠요.</span>';
+  if (n.need <= free) return `<span>쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${unit}에 약 <b>${won(n.need)}</b>. 나머지 <b>${won(free - n.need)}</b>까지 저축할 수 있어요.</span>`;
+  return `<span class="err">쓰는 날 ${n.nDays}일 × ${won(n.perDay)} = ${won(n.need)}인데, 고정 지출을 빼면 ${won(free)}이라 ${won(n.need - free)} 모자라요. 요일이나 금액을 줄여 볼까요?</span>`;
 }
 
 const numIn = (id) => { const el = document.getElementById(id); return el ? Math.floor(Number(String(el.value).replace(/[^\d]/g, '')) || 0) : 0; };
@@ -878,7 +887,8 @@ const ACT = {
     d.spendDays = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
     render();
   },
-  'onb-spend-amt': (el) => { view.onb.draft.spendAmount = Number(el.dataset.v); render(); },
+  'onb-spend-amt': (el) => { view.onb.draft.spendAmount = Number(el.dataset.v); view.onb.spendCustom = false; render(); },
+  'onb-spend-custom': () => { view.onb.spendCustom = true; render(); document.getElementById('onbSpendAmt')?.focus(); },
   'onb-spend-skip': () => { view.onb.draft.spendDays = null; view.onb.step = 4; render(); },
   'onb-cycle': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.cycle = el.dataset.v; d.payday = d.cycle === 'weekly' ? weekday(today) : Number(today.slice(8)) > 28 ? 1 : Number(today.slice(8)); render(); },
   'onb-payday': (el) => { const d = view.onb.draft; d.allowance = numIn('onbAllow'); d.payday = Number(el.dataset.v); render(); },
@@ -905,6 +915,10 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('input', (e) => {
   if (['onbGoalAmt', 'onbGoal'].includes(e.target.id)) updateOnbPreview();
+  if (e.target.id === 'onbSpendAmt' && view.onb) {
+    view.onb.draft.spendAmount = numIn('onbSpendAmt') || DEFAULT_SPEND;
+    document.getElementById('onbSpendSum').innerHTML = spendSummary(view.onb.draft);
+  }
   if (view.sheet?.type === 'settings' && e.target.id?.startsWith('set') && e.target.id !== 'setKey') view.sheet.form[e.target.id] = e.target.value;
   if (e.target.id?.startsWith('set') && e.target.id !== 'setKey') updateSettingsPreview();
   if (e.target.id === 'worryName' && view.sheet) view.sheet.name = e.target.value;
